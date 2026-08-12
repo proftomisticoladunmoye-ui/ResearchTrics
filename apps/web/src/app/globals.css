@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Brand token contract (Spec §96) — mirrors packages/config tokens. */
+:root {
+  --rt-blue: #0b3a82;
+  --rt-blue-dark: #082b61;
+  --rt-blue-royal: #1456a0;
+  --rt-blue-light: #eef5ff;
+  --rt-gold: #c9a227;
+  --rt-gold-light: #e6d28a;
+  --rt-gold-dark: #9a7610;
+  --rt-white: #ffffff;
+  --rt-background: #f7f9fc;
+  --rt-text: #172033;
+  --rt-muted: #5e6878;
+  --rt-border: #dce3ed;
+  --rt-success: #1f7a4d;
+  --rt-warning: #b7791f;
+  --rt-error: #c53030;
+  --rt-info: #2563eb;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background-color: var(--rt-background);
+    color: var(--rt-text);
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  /* Visible focus for keyboard users (Spec §51). */
+  :focus-visible {
+    outline: 2px solid var(--rt-blue-royal);
+    outline-offset: 2px;
+  }
+}

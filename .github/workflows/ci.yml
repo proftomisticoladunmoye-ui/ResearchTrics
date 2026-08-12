@@ -43,3 +43,6 @@ jobs:
           # Build-time placeholders (no secrets). Real values injected at deploy.
           DATABASE_URL: postgresql://user:pass@localhost:5432/db?schema=public
           NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+      - name: Integration smoke (real Postgres, embedded — no Docker)
+        run: pnpm --filter @researchtrics/web smoke

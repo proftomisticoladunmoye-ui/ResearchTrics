@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "smoke": "tsx scripts/smoke.ts",
+    "serve-db": "tsx scripts/serve-db.ts"
   },
   "dependencies": {
     "@researchtrics/config": "workspace:*",
@@ -37,6 +39,10 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.5"
+    "vitest": "^2.1.5",
+    "embedded-postgres": "18.4.0-beta.17",
+    "pg": "^8.13.1",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2"
   }
 }

@@ -37,3 +37,7 @@ Thumbs.db
 # Object storage local
 docker/minio-data/
 docker/postgres-data/
+
+# Embedded Postgres (local smoke runs)
+packages/db/.pgdata-smoke/
+**/.embedded-postgres/

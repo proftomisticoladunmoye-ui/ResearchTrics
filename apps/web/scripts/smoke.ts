@@ -190,13 +190,56 @@ async function main() {
       intel.expertise.length > 0 && intel.expertise.every((t) => t.evidence.length > 0),
     );
 
+    console.log('\nInstitutional platform (tenant-scoped, grounded)');
+    const institution = await core.findOrCreateInstitutionByName('Smoke University', { country: 'GB' });
+    await core.addAffiliation({ researcherId: reg.researcher.id, institutionId: institution.id, verified: true });
+    const pendingAff = await core.addAffiliation({
+      researcherId: reg2.researcher.id,
+      institutionId: institution.id,
+      verified: false,
+    });
+    const adminActor = {
+      userId: reg.user.id,
+      roles: [{ role: 'institution_admin' as const, scopeType: 'institution' as const, scopeId: institution.id }],
+    };
+    const plainActor = {
+      userId: reg2.user.id,
+      roles: [{ role: 'researcher' as const, scopeType: 'global' as const, scopeId: null }],
+    };
+
+    const ov1 = await core.getInstitutionOverview(institution.id);
+    check('overview counts affiliated researchers from real records', ov1.researcherCount === 2, `researchers=${ov1.researcherCount}`);
+    check('overview shows one pending, one verified affiliation', ov1.pendingAffiliationCount === 1 && ov1.verifiedAffiliationCount === 1, `pending=${ov1.pendingAffiliationCount} verified=${ov1.verifiedAffiliationCount}`);
+
+    check('tenant isolation — admin cannot manage another institution (Spec §49)', core.canManageInstitution(adminActor, 'some-other-institution') === false);
+    check('tenant isolation — a plain researcher cannot manage the institution', core.canManageInstitution(plainActor, institution.id) === false);
+
+    let deniedThrew = false;
+    await core.verifyAffiliation(plainActor, pendingAff.id).catch(() => {
+      deniedThrew = true;
+    });
+    check('non-admin verify is rejected (FORBIDDEN)', deniedThrew);
+
+    await core.verifyAffiliation(adminActor, pendingAff.id);
+    const ov2 = await core.getInstitutionOverview(institution.id);
+    check('admin verify confirms the affiliation', ov2.pendingAffiliationCount === 0 && ov2.verifiedAffiliationCount === 2, `pending=${ov2.pendingAffiliationCount} verified=${ov2.verifiedAffiliationCount}`);
+    const verifiedResearcher = await prisma.researcher.findUnique({ where: { id: reg2.researcher.id }, select: { verificationLevel: true } });
+    check('verifying raises identity to institution level (Spec §38)', (verifiedResearcher?.verificationLevel ?? 0) >= 2, `level=${verifiedResearcher?.verificationLevel}`);
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);
 
     await prisma.$disconnect();
   } finally {
-    await server.stop();
+    // embedded-postgres deletes its data dir on stop; on Windows a lingering
+    // file handle can make that rmdir race (EBUSY). Teardown cleanup must never
+    // mask the test outcome — swallow it and let the exit code reflect `fail`.
+    try {
+      await server.stop();
+    } catch (stopErr) {
+      console.warn('  [warn] embedded-postgres teardown:', (stopErr as Error).message);
+    }
   }
 
   console.log(`\n${'='.repeat(44)}\nSMOKE RESULT: ${pass} passed, ${fail} failed\n${'='.repeat(44)}`);

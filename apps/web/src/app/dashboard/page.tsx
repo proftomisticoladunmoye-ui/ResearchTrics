@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Card, MetricCard, Badge, Button } from '@researchtrics/ui';
-import { getResearcherAnalytics } from '@researchtrics/core';
+import { getResearcherAnalytics, administeredInstitutionIds } from '@researchtrics/core';
 import { getCurrentUser } from '@/lib/current-user';
 
 export const metadata: Metadata = {
@@ -18,6 +18,7 @@ export default async function DashboardPage() {
 
   const name = user.researcher?.displayName ?? user.email;
   const analytics = user.researcher ? await getResearcherAnalytics(user.researcher.id, 30) : null;
+  const administersInstitution = administeredInstitutionIds(user.actor).length > 0;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12">
@@ -47,6 +48,11 @@ export default async function DashboardPage() {
           <Button asChild size="sm" variant="ghost">
             <Link href="/dashboard/insights">AI Insights</Link>
           </Button>
+          {administersInstitution ? (
+            <Button asChild size="sm" variant="ghost">
+              <Link href="/dashboard/institution">Institution</Link>
+            </Button>
+          ) : null}
           {user.researcher ? (
             <Button asChild size="sm" variant="ghost">
               <Link href={`/researchers/${user.researcher.slug}`}>View public profile</Link>

@@ -46,6 +46,18 @@ export default async function InstitutionPage({
         {[inst.city, inst.country].filter(Boolean).join(', ') || inst.type || 'Institution'}
       </p>
 
+      {/* Grounded public counts (verified records only) */}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Badge variant="neutral">
+          {inst.affiliations.length} public researcher{inst.affiliations.length === 1 ? '' : 's'}
+        </Badge>
+        {inst.departments.length > 0 ? (
+          <Badge variant="neutral">
+            {inst.departments.length} department{inst.departments.length === 1 ? '' : 's'}
+          </Badge>
+        ) : null}
+      </div>
+
       <div className="mt-8 grid gap-8 lg:grid-cols-3">
         <section className="lg:col-span-2">
           <h2 className="text-lg font-semibold text-rt-text">Researchers</h2>

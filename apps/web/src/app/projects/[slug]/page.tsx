@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getProjectBySlug } from '@researchtrics/core';
 import { Card, Badge } from '@researchtrics/ui';
+import { track } from '@/lib/track';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -25,6 +26,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
   const { slug } = await params;
   const p = await getProjectBySlug(slug);
   if (!p) notFound();
+  await track('project_view', 'project', p.id);
 
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) =>
     children ? (

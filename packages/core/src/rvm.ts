@@ -31,6 +31,8 @@ export interface RvmInput {
   datasetOpenCount: number;
   preprintCount: number;
   knowledgeTranslationCount: number; // policy/research briefs etc.
+  engagementViews: number; // bot-filtered views (profile + publications)
+  engagementDownloads: number; // bot-filtered downloads
   hasOrcid: boolean;
   externalIdCount: number;
   hasWebsite: boolean;
@@ -171,10 +173,12 @@ export function computeRvm(
     ind('full_text', 'Full-text availability', input.openAccessCount, hasPubs ? sat(input.openAccessCount, 5) : null, 0.3),
   ]);
 
-  // Engagement: real view/download signals arrive with analytics; the prototype
-  // uses body-of-work surface area and marks it lower-confidence.
+  // Engagement: bot-filtered views + downloads (Spec §41), with body-of-work
+  // surface area as a small tertiary signal.
   push('engagement', [
-    ind('output_surface', 'Available outputs (engagement surface)', input.publicationCount + input.connectedOutputs, input.publicationCount + input.connectedOutputs > 0 ? sat(input.publicationCount + input.connectedOutputs, 15) : null, 1),
+    ind('views', 'Views (bot-filtered)', input.engagementViews, sat(input.engagementViews, 50), 0.5),
+    ind('downloads', 'Downloads (bot-filtered)', input.engagementDownloads, sat(input.engagementDownloads, 20), 0.3),
+    ind('output_surface', 'Available outputs', input.publicationCount + input.connectedOutputs, sat(input.publicationCount + input.connectedOutputs, 15), 0.2),
   ]);
 
   push('citation_influence', [

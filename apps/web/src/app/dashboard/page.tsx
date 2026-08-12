@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Card, MetricCard, Badge, Button } from '@researchtrics/ui';
+import { getResearcherAnalytics } from '@researchtrics/core';
 import { getCurrentUser } from '@/lib/current-user';
 
 export const metadata: Metadata = {
@@ -9,11 +10,14 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   const name = user.researcher?.displayName ?? user.email;
+  const analytics = user.researcher ? await getResearcherAnalytics(user.researcher.id, 30) : null;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12">
@@ -34,6 +38,9 @@ export default async function DashboardPage() {
           <Button asChild size="sm" variant="accent">
             <Link href="/dashboard/rvm">View RVM</Link>
           </Button>
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/dashboard/analytics">Analytics</Link>
+          </Button>
           {user.researcher ? (
             <Button asChild size="sm" variant="ghost">
               <Link href={`/researchers/${user.researcher.slug}`}>View public profile</Link>
@@ -43,9 +50,11 @@ export default async function DashboardPage() {
       </div>
 
       <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Publications" value={0} />
-        <MetricCard label="Citations" value={0} />
-        <MetricCard label="Collaborators" value={0} />
+        <MetricCard label="Publications" value={analytics?.publicationCount ?? 0} />
+        <MetricCard label="Citations" value={analytics?.citationTotal ?? 0} />
+        <Link href="/dashboard/analytics" className="block">
+          <MetricCard label="Publication views" value={analytics?.publicationViews ?? 0} hint="bot-filtered" />
+        </Link>
         <Link href="/dashboard/rvm" className="block">
           <MetricCard label="RVM (prototype)" value="View" emphasis="gold" hint="Research Visibility Metric" />
         </Link>

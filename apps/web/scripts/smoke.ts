@@ -133,6 +133,16 @@ async function main() {
     check('search finds seeded content', res.total > 0, `total=${res.total}`);
     check('search facets populated', res.facets.types.publication + res.facets.types.project >= 1, `pub=${res.facets.types.publication} proj=${res.facets.types.project} sw=${res.facets.types.software}`);
 
+    console.log('\nAnalytics (bot-filtered)');
+    await core.recordEvent({ eventType: 'publication_view', entityType: 'publication', entityId: created.publicationId, userAgent: 'Mozilla/5.0 (human)', ip: '1.2.3.4' });
+    await core.recordEvent({ eventType: 'publication_view', entityType: 'publication', entityId: created.publicationId, userAgent: 'Googlebot/2.1', ip: '9.9.9.9' });
+    const pm = await core.getEntityMetrics('publication', created.publicationId);
+    check('human view counted, bot excluded', pm.publication_view === 1, `views=${pm.publication_view}`);
+    const dup = await core.getEntityMetrics('publication', created.publicationId);
+    await core.recordEvent({ eventType: 'publication_view', entityType: 'publication', entityId: created.publicationId, userAgent: 'Mozilla/5.0 (human)', ip: '1.2.3.4' });
+    const after = await core.getEntityMetrics('publication', created.publicationId);
+    check('repeat view de-duplicated', after.publication_view === dup.publication_view, `still=${after.publication_view}`);
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

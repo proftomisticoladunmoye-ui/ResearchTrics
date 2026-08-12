@@ -3,11 +3,12 @@ import {
   getPublicationBySlug,
   buildCitationData,
   formatCitation,
+  recordEvent,
   CITATION_FORMATS,
+  notFound,
   type CitationFormat,
 } from '@researchtrics/core';
 import { fail } from '@/lib/api';
-import { notFound } from '@researchtrics/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,16 @@ export async function GET(
 
     const pub = await getPublicationBySlug(slug);
     if (!pub) throw notFound('Publication not found');
+
+    await recordEvent({
+      eventType: 'citation_export',
+      entityType: 'publication',
+      entityId: pub.id,
+      userAgent: req.headers.get('user-agent'),
+      ip: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+      referrer: req.headers.get('referer'),
+      dedupeWindowMinutes: 0,
+    }).catch(() => undefined);
 
     const body = formatCitation(buildCitationData(pub), format);
     const meta = CITATION_FORMATS[format];

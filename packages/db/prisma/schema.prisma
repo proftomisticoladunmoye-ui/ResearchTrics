@@ -215,6 +215,25 @@ enum DatasetAccessLevel {
   private
 }
 
+/// Analytics event types (Spec §41). Distinguishes the interaction kinds the
+/// platform counts; bots are flagged and excluded from human counts.
+enum AnalyticsEventType {
+  page_view
+  publication_view
+  profile_view
+  project_view
+  dataset_view
+  instrument_view
+  software_view
+  journal_view
+  institution_view
+  download
+  citation_export
+  search_appearance
+  follow
+  external_referral
+}
+
 // ============================================================
 // Identity & accounts
 // ============================================================
@@ -1009,6 +1028,45 @@ model RvmScore {
 
   @@index([subjectType, subjectId, calculatedAt])
   @@map("rvm_scores")
+}
+
+// ============================================================
+// Analytics (Phase 9 — Spec §41)
+// ============================================================
+
+/// Raw interaction event. Bots are recorded but flagged (`isBot`) and excluded
+/// from human counts (Spec §41, §65). Only a pseudonymous visitor hash is
+/// stored — never a raw IP (Spec §36).
+model AnalyticsEvent {
+  id           String             @id @default(uuid())
+  eventType    AnalyticsEventType @map("event_type")
+  entityType   String             @map("entity_type")
+  entityId     String             @map("entity_id")
+  visitorHash  String?            @map("visitor_hash")
+  isBot        Boolean            @default(false) @map("is_bot")
+  referrerHost String?            @map("referrer_host")
+  country      String?
+  occurredAt   DateTime           @default(now()) @map("occurred_at")
+
+  @@index([entityType, entityId, eventType, isBot])
+  @@index([occurredAt])
+  @@index([entityType, entityId, visitorHash, eventType, occurredAt])
+  @@map("analytics_events")
+}
+
+/// Periodic aggregated snapshot for trends (Spec §41). Populated by a worker
+/// aggregation job; trends can also be derived directly from events for MVP.
+model MetricSnapshot {
+  id         String   @id @default(uuid())
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  period     String // e.g. '2026-08-12' (day) or 'all'
+  payload    Json
+  capturedAt DateTime @default(now()) @map("captured_at")
+
+  @@unique([entityType, entityId, period])
+  @@index([entityType, entityId, capturedAt])
+  @@map("metric_snapshots")
 }
 
 /// Append-only audit trail — no silent destructive edits (Spec §68).

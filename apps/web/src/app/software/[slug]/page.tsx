@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getSoftwareBySlug } from '@researchtrics/core';
 import { Badge, DoiBadge, Button } from '@researchtrics/ui';
+import { track } from '@/lib/track';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -25,6 +26,7 @@ export default async function SoftwarePage({ params }: { params: Promise<{ slug:
   const { slug } = await params;
   const s = await getSoftwareBySlug(slug);
   if (!s) notFound();
+  await track('software_view', 'software', s.id);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">

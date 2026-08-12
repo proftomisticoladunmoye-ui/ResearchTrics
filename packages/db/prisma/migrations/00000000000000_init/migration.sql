@@ -68,6 +68,9 @@ CREATE TYPE "ProjectStatus" AS ENUM ('proposed', 'active', 'completed', 'suspend
 -- CreateEnum
 CREATE TYPE "DatasetAccessLevel" AS ENUM ('open', 'restricted', 'request', 'embargoed', 'private');
 
+-- CreateEnum
+CREATE TYPE "AnalyticsEventType" AS ENUM ('page_view', 'publication_view', 'profile_view', 'project_view', 'dataset_view', 'instrument_view', 'software_view', 'journal_view', 'institution_view', 'download', 'citation_export', 'search_appearance', 'follow', 'external_referral');
+
 -- CreateTable
 CREATE TABLE "users" (
     "id" TEXT NOT NULL,
@@ -642,6 +645,33 @@ CREATE TABLE "rvm_scores" (
 );
 
 -- CreateTable
+CREATE TABLE "analytics_events" (
+    "id" TEXT NOT NULL,
+    "event_type" "AnalyticsEventType" NOT NULL,
+    "entity_type" TEXT NOT NULL,
+    "entity_id" TEXT NOT NULL,
+    "visitor_hash" TEXT,
+    "is_bot" BOOLEAN NOT NULL DEFAULT false,
+    "referrer_host" TEXT,
+    "country" TEXT,
+    "occurred_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "analytics_events_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "metric_snapshots" (
+    "id" TEXT NOT NULL,
+    "entity_type" TEXT NOT NULL,
+    "entity_id" TEXT NOT NULL,
+    "period" TEXT NOT NULL,
+    "payload" JSONB NOT NULL,
+    "captured_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "metric_snapshots_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "audit_logs" (
     "id" TEXT NOT NULL,
     "actor_id" TEXT,
@@ -880,6 +910,21 @@ CREATE UNIQUE INDEX "external_records_source_source_id_entity_type_entity_id_key
 
 -- CreateIndex
 CREATE INDEX "rvm_scores_subject_type_subject_id_calculated_at_idx" ON "rvm_scores"("subject_type", "subject_id", "calculated_at");
+
+-- CreateIndex
+CREATE INDEX "analytics_events_entity_type_entity_id_event_type_is_bot_idx" ON "analytics_events"("entity_type", "entity_id", "event_type", "is_bot");
+
+-- CreateIndex
+CREATE INDEX "analytics_events_occurred_at_idx" ON "analytics_events"("occurred_at");
+
+-- CreateIndex
+CREATE INDEX "analytics_events_entity_type_entity_id_visitor_hash_event_t_idx" ON "analytics_events"("entity_type", "entity_id", "visitor_hash", "event_type", "occurred_at");
+
+-- CreateIndex
+CREATE INDEX "metric_snapshots_entity_type_entity_id_captured_at_idx" ON "metric_snapshots"("entity_type", "entity_id", "captured_at");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "metric_snapshots_entity_type_entity_id_period_key" ON "metric_snapshots"("entity_type", "entity_id", "period");
 
 -- CreateIndex
 CREATE INDEX "audit_logs_entity_type_entity_id_idx" ON "audit_logs"("entity_type", "entity_id");

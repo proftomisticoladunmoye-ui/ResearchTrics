@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getPublicationBySlug, CITATION_FORMATS, type CitationFormat } from '@researchtrics/core';
+import { getPublicationBySlug, getEntityMetrics, CITATION_FORMATS, type CitationFormat } from '@researchtrics/core';
 import { Card, Badge, DoiBadge, OpenAccessBadge, Button } from '@researchtrics/ui';
+import { track } from '@/lib/track';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -55,6 +56,9 @@ export default async function PublicationPage({
   const { slug } = await params;
   const p = await getPublicationBySlug(slug);
   if (!p) notFound();
+
+  await track('publication_view', 'publication', p.id);
+  const metrics = await getEntityMetrics('publication', p.id);
 
   const doi = p.identifiers.find((i) => i.scheme === 'doi')?.value;
 
@@ -109,6 +113,11 @@ export default async function PublicationPage({
         {p.firstPage ? `: ${p.firstPage}${p.lastPage ? `–${p.lastPage}` : ''}` : ''}
         {p.publishedYear ? ` · ${p.publishedYear}` : ''}
         {p.publisher ? ` · ${p.publisher}` : ''}
+      </p>
+
+      <p className="mt-2 text-sm text-rt-muted" aria-label="Engagement (bot-filtered)">
+        {(metrics.publication_view ?? 0).toLocaleString()} views ·{' '}
+        {(metrics.download ?? 0).toLocaleString()} downloads
       </p>
 
       <div className="mt-6 flex flex-wrap gap-3">

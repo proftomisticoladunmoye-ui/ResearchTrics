@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getResearcherBySlug, isAdmin } from '@researchtrics/core';
+import { getResearcherBySlug, getResearcherAnalytics, isAdmin } from '@researchtrics/core';
 import {
   Avatar,
   Badge,
@@ -11,6 +11,7 @@ import {
   OrcidBadge,
 } from '@researchtrics/ui';
 import { getCurrentUser } from '@/lib/current-user';
+import { track } from '@/lib/track';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -62,6 +63,10 @@ export default async function ResearcherProfilePage({
       </div>
     );
   }
+
+  // Record a profile view (not for the owner viewing their own page; bots filtered).
+  if (!isOwner) await track('profile_view', 'researcher', r.id);
+  const analytics = await getResearcherAnalytics(r.id);
 
   const orcid = r.orcidConnection?.orcid ?? r.identifiers.find((i) => i.scheme === 'orcid')?.value;
   const primaryAffiliation = r.affiliations.find((a) => a.isPrimary) ?? r.affiliations[0];
@@ -119,9 +124,9 @@ export default async function ResearcherProfilePage({
 
       {/* Research snapshot (Spec §8) — counts arrive with later phases. */}
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Publications" value={0} />
-        <MetricCard label="Citations" value={0} />
-        <MetricCard label="Collaborators" value={0} />
+        <MetricCard label="Publications" value={analytics.publicationCount} />
+        <MetricCard label="Citations" value={analytics.citationTotal} hint="max across sources" />
+        <MetricCard label="Profile views" value={analytics.profileViews} hint="bot-filtered" />
         <MetricCard label="Verification" value={`L${r.verificationLevel}`} emphasis="gold" />
       </div>
 

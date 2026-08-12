@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getDatasetBySlug } from '@researchtrics/core';
 import { Card, Badge, Alert, DoiBadge } from '@researchtrics/ui';
+import { track } from '@/lib/track';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -25,6 +26,7 @@ export default async function DatasetPage({ params }: { params: Promise<{ slug: 
   const { slug } = await params;
   const d = await getDatasetBySlug(slug);
   if (!d) notFound();
+  await track('dataset_view', 'dataset', d.id);
 
   const restricted = d.accessLevel !== 'open';
   const jsonLd = {

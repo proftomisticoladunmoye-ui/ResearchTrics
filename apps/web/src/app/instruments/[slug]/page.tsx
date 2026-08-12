@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getInstrumentBySlug } from '@researchtrics/core';
 import { Card, Badge, DoiBadge } from '@researchtrics/ui';
+import { track } from '@/lib/track';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -25,6 +26,7 @@ export default async function InstrumentPage({ params }: { params: Promise<{ slu
   const { slug } = await params;
   const i = await getInstrumentBySlug(slug);
   if (!i) notFound();
+  await track('instrument_view', 'instrument', i.id);
 
   const Row = ({ label, value }: { label: string; value?: string | number | null }) =>
     value ? (

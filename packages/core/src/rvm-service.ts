@@ -1,5 +1,6 @@
 import { prisma, type PrismaClient } from '@researchtrics/db';
 import { computeRvm, RVM_VERSION, type RvmInput, type RvmResult, type DimensionScore } from './rvm';
+import { getResearcherEngagement } from './analytics';
 
 /**
  * RVM data gathering + persistence (Spec §23, §30, §31). Signals are read from
@@ -135,6 +136,7 @@ export async function gatherRvmInput(
     where: { creatorResearcherId: researcherId, deletedAt: null, accessLevel: 'open' },
   });
 
+  const engagement = await getResearcherEngagement(researcherId, client);
   const hasOrcid = !!researcher.orcidConnection || researcher.identifiers.some((i) => i.scheme === 'orcid' && i.verified);
   const connectedOutputs =
     researcher._count.datasetsCreated +
@@ -163,6 +165,8 @@ export async function gatherRvmInput(
     datasetOpenCount,
     preprintCount,
     knowledgeTranslationCount,
+    engagementViews: engagement.views,
+    engagementDownloads: engagement.downloads,
     hasOrcid,
     externalIdCount: researcher.identifiers.length,
     hasWebsite: !!researcher.website,

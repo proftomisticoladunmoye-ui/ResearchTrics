@@ -143,6 +143,26 @@ async function main() {
     const after = await core.getEntityMetrics('publication', created.publicationId);
     check('repeat view de-duplicated', after.publication_view === dup.publication_view, `still=${after.publication_view}`);
 
+    console.log('\nCollaboration (explainable)');
+    await core.setInterests(reg.researcher.id, ['psychometrics', 'measurement invariance']);
+    const reg2 = await core.registerResearcher({ email: 'alan@example.org', password: 'correcthorse7!', displayName: 'Alan Turing' });
+    await core.setInterests(reg2.researcher.id, ['psychometrics', 'computation']);
+    const recs = await core.recommendCollaborators(reg.researcher.id, 10);
+    check('recommends a collaborator with shared interest', recs.length >= 1 && recs[0]!.researcherId === reg2.researcher.id, recs[0]?.displayName);
+    check('every recommendation is explained (Spec §29)', recs.every((r) => r.reasons.length > 0), recs[0]?.reasons.join('; '));
+    const cr = await core.createCollaborationRequest(reg.researcher.id, reg2.researcher.id, 'Keen to collaborate');
+    await core.respondToRequest(cr.id, reg2.researcher.id, true);
+    const incoming = await core.listIncomingRequests(reg2.researcher.id);
+    check('request accepted (no longer pending)', incoming.length === 0);
+
+    console.log('\nResearch groups');
+    const grp = await core.createGroup(reg.researcher.id, { name: 'Psychometrics Lab', interests: 'psychometrics' });
+    const groupDetail = await core.getGroupBySlug(grp.slug);
+    check('group created with lead as member', groupDetail?.members.length === 1 && groupDetail.members[0]!.researcherId === reg.researcher.id);
+    await core.addGroupMember(grp.id, reg2.researcher.id, 'Member');
+    const after2 = await core.getGroupBySlug(grp.slug);
+    check('member added to group', after2?.members.length === 2);
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

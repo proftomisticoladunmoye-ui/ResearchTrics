@@ -197,6 +197,14 @@ enum OjsStrategy {
   native_rest
 }
 
+/// Collaboration request lifecycle (Spec §18).
+enum CollaborationRequestStatus {
+  pending
+  accepted
+  declined
+  withdrawn
+}
+
 /// Project lifecycle (Spec §19).
 enum ProjectStatus {
   proposed
@@ -336,6 +344,10 @@ model Researcher {
   datasetsCreated     Dataset[]
   instrumentsAuthored Instrument[]
   softwareAuthored    Software[]
+  groupsLed           ResearchGroup[]     @relation("GroupLead")
+  groupMemberships    ResearchGroupMember[]
+  sentCollabRequests     CollaborationRequest[] @relation("CollabFrom")
+  receivedCollabRequests CollaborationRequest[] @relation("CollabTo")
 
   @@index([familyName])
   @@index([verificationLevel])
@@ -390,10 +402,11 @@ model Institution {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  departments  Department[]
-  affiliations Affiliation[]
-  projects     Project[]
-  datasets     Dataset[]
+  departments    Department[]
+  affiliations   Affiliation[]
+  projects       Project[]
+  datasets       Dataset[]
+  researchGroups ResearchGroup[]
 
   @@index([country])
   @@map("institutions")
@@ -1028,6 +1041,67 @@ model RvmScore {
 
   @@index([subjectType, subjectId, calculatedAt])
   @@map("rvm_scores")
+}
+
+// ============================================================
+// Collaboration & research groups (Phase 8 — Spec §18, §27)
+// ============================================================
+
+model ResearchGroup {
+  id               String   @id @default(uuid())
+  slug             String   @unique
+  name             String
+  description      String?
+  interests        String?
+  institutionId    String?  @map("institution_id")
+  leadResearcherId String?  @map("lead_researcher_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  institution Institution?          @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  lead        Researcher?           @relation("GroupLead", fields: [leadResearcherId], references: [id], onDelete: SetNull)
+  members     ResearchGroupMember[]
+
+  @@map("research_groups")
+}
+
+model ResearchGroupMember {
+  id           String   @id @default(uuid())
+  groupId      String   @map("group_id")
+  researcherId String   @map("researcher_id")
+  role         String?
+  joinedAt     DateTime @default(now()) @map("joined_at")
+
+  group      ResearchGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  researcher Researcher    @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, researcherId])
+  @@index([groupId])
+  @@index([researcherId])
+  @@map("research_group_members")
+}
+
+/// A collaboration request between researchers (Spec §18). Recommendations that
+/// prompt these always carry an explanation (Spec §29).
+model CollaborationRequest {
+  id             String                     @id @default(uuid())
+  fromResearcherId String                   @map("from_researcher_id")
+  toResearcherId   String                   @map("to_researcher_id")
+  message        String?
+  status         CollaborationRequestStatus @default(pending)
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  respondedAt DateTime? @map("responded_at")
+
+  from Researcher @relation("CollabFrom", fields: [fromResearcherId], references: [id], onDelete: Cascade)
+  to   Researcher @relation("CollabTo", fields: [toResearcherId], references: [id], onDelete: Cascade)
+
+  @@unique([fromResearcherId, toResearcherId])
+  @@index([toResearcherId, status])
+  @@index([fromResearcherId, status])
+  @@map("collaboration_requests")
 }
 
 // ============================================================

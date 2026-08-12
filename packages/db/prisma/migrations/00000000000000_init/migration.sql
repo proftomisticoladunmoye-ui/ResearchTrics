@@ -63,6 +63,9 @@ CREATE TYPE "SyncKind" AS ENUM ('manual', 'scheduled', 'webhook');
 CREATE TYPE "OjsStrategy" AS ENUM ('oai_pmh', 'native_rest');
 
 -- CreateEnum
+CREATE TYPE "CollaborationRequestStatus" AS ENUM ('pending', 'accepted', 'declined', 'withdrawn');
+
+-- CreateEnum
 CREATE TYPE "ProjectStatus" AS ENUM ('proposed', 'active', 'completed', 'suspended', 'archived');
 
 -- CreateEnum
@@ -645,6 +648,46 @@ CREATE TABLE "rvm_scores" (
 );
 
 -- CreateTable
+CREATE TABLE "research_groups" (
+    "id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "interests" TEXT,
+    "institution_id" TEXT,
+    "lead_researcher_id" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "deleted_at" TIMESTAMP(3),
+
+    CONSTRAINT "research_groups_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "research_group_members" (
+    "id" TEXT NOT NULL,
+    "group_id" TEXT NOT NULL,
+    "researcher_id" TEXT NOT NULL,
+    "role" TEXT,
+    "joined_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "research_group_members_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "collaboration_requests" (
+    "id" TEXT NOT NULL,
+    "from_researcher_id" TEXT NOT NULL,
+    "to_researcher_id" TEXT NOT NULL,
+    "message" TEXT,
+    "status" "CollaborationRequestStatus" NOT NULL DEFAULT 'pending',
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "responded_at" TIMESTAMP(3),
+
+    CONSTRAINT "collaboration_requests_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "analytics_events" (
     "id" TEXT NOT NULL,
     "event_type" "AnalyticsEventType" NOT NULL,
@@ -912,6 +955,27 @@ CREATE UNIQUE INDEX "external_records_source_source_id_entity_type_entity_id_key
 CREATE INDEX "rvm_scores_subject_type_subject_id_calculated_at_idx" ON "rvm_scores"("subject_type", "subject_id", "calculated_at");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "research_groups_slug_key" ON "research_groups"("slug");
+
+-- CreateIndex
+CREATE INDEX "research_group_members_group_id_idx" ON "research_group_members"("group_id");
+
+-- CreateIndex
+CREATE INDEX "research_group_members_researcher_id_idx" ON "research_group_members"("researcher_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "research_group_members_group_id_researcher_id_key" ON "research_group_members"("group_id", "researcher_id");
+
+-- CreateIndex
+CREATE INDEX "collaboration_requests_to_researcher_id_status_idx" ON "collaboration_requests"("to_researcher_id", "status");
+
+-- CreateIndex
+CREATE INDEX "collaboration_requests_from_researcher_id_status_idx" ON "collaboration_requests"("from_researcher_id", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "collaboration_requests_from_researcher_id_to_researcher_id_key" ON "collaboration_requests"("from_researcher_id", "to_researcher_id");
+
+-- CreateIndex
 CREATE INDEX "analytics_events_entity_type_entity_id_event_type_is_bot_idx" ON "analytics_events"("entity_type", "entity_id", "event_type", "is_bot");
 
 -- CreateIndex
@@ -1060,6 +1124,24 @@ ALTER TABLE "sync_jobs" ADD CONSTRAINT "sync_jobs_ojs_source_id_fkey" FOREIGN KE
 
 -- AddForeignKey
 ALTER TABLE "sync_logs" ADD CONSTRAINT "sync_logs_sync_job_id_fkey" FOREIGN KEY ("sync_job_id") REFERENCES "sync_jobs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "research_groups" ADD CONSTRAINT "research_groups_institution_id_fkey" FOREIGN KEY ("institution_id") REFERENCES "institutions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "research_groups" ADD CONSTRAINT "research_groups_lead_researcher_id_fkey" FOREIGN KEY ("lead_researcher_id") REFERENCES "researchers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "research_group_members" ADD CONSTRAINT "research_group_members_group_id_fkey" FOREIGN KEY ("group_id") REFERENCES "research_groups"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "research_group_members" ADD CONSTRAINT "research_group_members_researcher_id_fkey" FOREIGN KEY ("researcher_id") REFERENCES "researchers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "collaboration_requests" ADD CONSTRAINT "collaboration_requests_from_researcher_id_fkey" FOREIGN KEY ("from_researcher_id") REFERENCES "researchers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "collaboration_requests" ADD CONSTRAINT "collaboration_requests_to_researcher_id_fkey" FOREIGN KEY ("to_researcher_id") REFERENCES "researchers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_actor_id_fkey" FOREIGN KEY ("actor_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;

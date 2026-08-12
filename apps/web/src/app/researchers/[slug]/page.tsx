@@ -12,6 +12,7 @@ import {
 } from '@researchtrics/ui';
 import { getCurrentUser } from '@/lib/current-user';
 import { track } from '@/lib/track';
+import { ConnectButton } from '@/components/connect-button';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -117,6 +118,9 @@ export default async function ResearcherProfilePage({
               >
                 Website
               </a>
+            ) : null}
+            {viewer && !isOwner && viewer.researcher ? (
+              <ConnectButton toResearcherId={r.id} />
             ) : null}
           </div>
         </div>

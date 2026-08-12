@@ -21,3 +21,5 @@ export * from './research-outputs';
 export * from './rvm';
 export * from './rvm-service';
 export * from './analytics';
+export * from './collaboration';
+export * from './groups';

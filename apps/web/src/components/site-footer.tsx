@@ -11,6 +11,7 @@ const COLUMNS: { heading: string; links: { href: string; label: string }[] }[] =
       { href: '/publications', label: 'Publications' },
       { href: '/institutions', label: 'Institutions' },
       { href: '/journals', label: 'Journals' },
+      { href: '/research-groups', label: 'Research Groups' },
     ],
   },
   {

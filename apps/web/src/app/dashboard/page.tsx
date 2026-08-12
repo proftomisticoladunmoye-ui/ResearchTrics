@@ -31,6 +31,9 @@ export default async function DashboardPage() {
           <Button asChild size="sm">
             <Link href="/dashboard/profile">Edit profile</Link>
           </Button>
+          <Button asChild size="sm" variant="accent">
+            <Link href="/dashboard/rvm">View RVM</Link>
+          </Button>
           {user.researcher ? (
             <Button asChild size="sm" variant="ghost">
               <Link href={`/researchers/${user.researcher.slug}`}>View public profile</Link>
@@ -43,7 +46,9 @@ export default async function DashboardPage() {
         <MetricCard label="Publications" value={0} />
         <MetricCard label="Citations" value={0} />
         <MetricCard label="Collaborators" value={0} />
-        <MetricCard label="RVM (prototype)" value="—" emphasis="gold" hint="Available in a later phase" />
+        <Link href="/dashboard/rvm" className="block">
+          <MetricCard label="RVM (prototype)" value="View" emphasis="gold" hint="Research Visibility Metric" />
+        </Link>
       </div>
 
       <Card className="mt-8 p-6">

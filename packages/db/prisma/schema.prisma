@@ -993,6 +993,24 @@ model ExternalRecord {
   @@map("external_records")
 }
 
+/// RVM score snapshot (Spec §23–25). Fully transparent + versioned: stores raw
+/// values, normalization, weights, confidence and missing-data so historical
+/// scores are reproducible. Weights are PROVISIONAL, pending validation (§24).
+model RvmScore {
+  id          String   @id @default(uuid())
+  subjectType String   @map("subject_type") // 'researcher' | 'institution' | 'group'
+  subjectId   String   @map("subject_id")
+  version     String
+  overall     Float
+  dimensions  Json
+  confidence  Float
+  missingData Json?    @map("missing_data")
+  calculatedAt DateTime @default(now()) @map("calculated_at")
+
+  @@index([subjectType, subjectId, calculatedAt])
+  @@map("rvm_scores")
+}
+
 /// Append-only audit trail — no silent destructive edits (Spec §68).
 model AuditLog {
   id         String   @id @default(uuid())

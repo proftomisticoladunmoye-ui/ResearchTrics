@@ -18,3 +18,5 @@ export * from './storage';
 export * from './scholar-compliance';
 export * from './project';
 export * from './research-outputs';
+export * from './rvm';
+export * from './rvm-service';

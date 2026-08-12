@@ -140,9 +140,10 @@ Wherever RVM appears, the UI distinguishes:
 
 ## 9. Phase stance
 
-- **Phase 10** builds the RVM data model, indicator engine, dimension scoring, transparency surfacing, researcher dashboard, and institutional RVM — but **does not finalize weights without methodological review** (Spec §10, §23).
-- A **prototype RVM** is part of the MVP (Spec §78) — functional, transparent, provisional.
-- Weight finalization and psychometric validation are explicitly **post-MVP**.
+- **Phase 10 — IMPLEMENTED (prototype).** The RVM data model (`rvm_scores`), indicator engine (`packages/core/rvm.ts`), dimension scoring, transparency surfacing, and the researcher dashboard (`/dashboard/rvm`) are built and unit-tested. Institutional RVM and an admin weight-configuration UI are deferred.
+- Version `rvm-proto-0.1`; weights are the **provisional defaults** in `DEFAULT_DIMENSION_WEIGHTS`, labelled *pending empirical validation* everywhere they surface (§24). **Not finalized without methodological review** (Spec §10, §23).
+- A **prototype RVM** is part of the MVP (Spec §78) — functional, transparent, provisional. See [`PHASE-10-RVM.md`](./PHASE-10-RVM.md).
+- Weight finalization and psychometric validation (reliability/EFA/CFA/validity) remain **post-MVP** (§24).
 
 ---
 

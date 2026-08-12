@@ -4,7 +4,16 @@
  * callers. Semantic/vector search can be layered behind the same interface.
  */
 
-export const SEARCHABLE_TYPES = ['researcher', 'publication', 'institution', 'journal'] as const;
+export const SEARCHABLE_TYPES = [
+  'researcher',
+  'publication',
+  'institution',
+  'journal',
+  'project',
+  'dataset',
+  'instrument',
+  'software',
+] as const;
 export type SearchableType = (typeof SEARCHABLE_TYPES)[number];
 
 export interface SearchFilters {

@@ -22,6 +22,10 @@ const TYPE_LABEL: Record<SearchableType, string> = {
   publication: 'Publications',
   institution: 'Institutions',
   journal: 'Journals',
+  project: 'Projects',
+  dataset: 'Datasets',
+  instrument: 'Instruments',
+  software: 'Software',
 };
 
 const TYPE_BADGE: Record<SearchableType, string> = {
@@ -29,6 +33,10 @@ const TYPE_BADGE: Record<SearchableType, string> = {
   publication: 'Publication',
   institution: 'Institution',
   journal: 'Journal',
+  project: 'Project',
+  dataset: 'Dataset',
+  instrument: 'Instrument',
+  software: 'Software',
 };
 
 function toStr(v: string | string[] | undefined): string | undefined {

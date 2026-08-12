@@ -16,3 +16,5 @@ export * from './citation-export';
 export * from './publication';
 export * from './storage';
 export * from './scholar-compliance';
+export * from './project';
+export * from './research-outputs';

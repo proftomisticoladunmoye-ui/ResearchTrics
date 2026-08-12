@@ -197,6 +197,24 @@ enum OjsStrategy {
   native_rest
 }
 
+/// Project lifecycle (Spec §19).
+enum ProjectStatus {
+  proposed
+  active
+  completed
+  suspended
+  archived
+}
+
+/// Dataset access conditions (Spec §20). Restricted content is never exposed.
+enum DatasetAccessLevel {
+  open
+  restricted
+  request
+  embargoed
+  private
+}
+
 // ============================================================
 // Identity & accounts
 // ============================================================
@@ -294,6 +312,11 @@ model Researcher {
   verificationRecords VerificationRecord[]
   orcidConnection     OrcidConnection?
   authorships         PublicationAuthor[]
+  projectsLed         Project[]           @relation("ProjectPI")
+  projectMemberships  ProjectMember[]
+  datasetsCreated     Dataset[]
+  instrumentsAuthored Instrument[]
+  softwareAuthored    Software[]
 
   @@index([familyName])
   @@index([verificationLevel])
@@ -350,6 +373,8 @@ model Institution {
 
   departments  Department[]
   affiliations Affiliation[]
+  projects     Project[]
+  datasets     Dataset[]
 
   @@index([country])
   @@map("institutions")
@@ -524,6 +549,7 @@ model Publication {
   identifiers    PublicationIdentifier[]
   authors        PublicationAuthor[]
   citationCounts PublicationCitationCount[]
+  projectLinks   ProjectPublication[]
 
   @@index([publishedYear])
   @@index([journalId])
@@ -602,6 +628,212 @@ model File {
 
   @@index([uploaderId])
   @@map("files")
+}
+
+// ============================================================
+// Projects, grants & research outputs (Phase 6 — Spec §19–22)
+// ============================================================
+
+model Funder {
+  id        String  @id @default(uuid())
+  name      String
+  rorId     String? @map("ror_id")
+  country   String?
+  funderDoi String? @map("funder_doi")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  grants   Grant[]
+  projects Project[]
+
+  @@map("funders")
+}
+
+model Grant {
+  id        String    @id @default(uuid())
+  title     String
+  funderId  String?   @map("funder_id")
+  amount    Decimal?  @db.Decimal(14, 2)
+  currency  String?
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  funder   Funder?   @relation(fields: [funderId], references: [id], onDelete: SetNull)
+  projects Project[]
+
+  @@index([funderId])
+  @@map("grants")
+}
+
+/// A research project — the hub that connects outputs, data, funding and people
+/// so no output is an isolated PDF (Spec §1, §19).
+model Project {
+  id               String        @id @default(uuid())
+  publicId         String        @unique @map("public_id") // RTJ-00000001
+  slug             String        @unique
+  title            String
+  description      String?
+  objectives       String?
+  researchQuestions String?      @map("research_questions")
+  methodology      String?
+  status           ProjectStatus @default(active)
+  startDate        DateTime?     @map("start_date")
+  endDate          DateTime?     @map("end_date")
+  piResearcherId   String?       @map("pi_researcher_id")
+  institutionId    String?       @map("institution_id")
+  funderId         String?       @map("funder_id")
+  grantId          String?       @map("grant_id")
+  visibility       VisibilityLevel @default(public)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  pi           Researcher?          @relation("ProjectPI", fields: [piResearcherId], references: [id], onDelete: SetNull)
+  institution  Institution?         @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  funder       Funder?              @relation(fields: [funderId], references: [id], onDelete: SetNull)
+  grant        Grant?               @relation(fields: [grantId], references: [id], onDelete: SetNull)
+  members      ProjectMember[]
+  datasets     Dataset[]
+  instruments  Instrument[]
+  software     Software[]
+  publications ProjectPublication[]
+
+  @@index([status])
+  @@index([piResearcherId])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id           String   @id @default(uuid())
+  projectId    String   @map("project_id")
+  researcherId String   @map("researcher_id")
+  role         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  researcher Researcher @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, researcherId])
+  @@index([projectId])
+  @@map("project_members")
+}
+
+model ProjectPublication {
+  id            String @id @default(uuid())
+  projectId     String @map("project_id")
+  publicationId String @map("publication_id")
+
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, publicationId])
+  @@map("project_publications")
+}
+
+/// Dataset record (Spec §20). Restricted content is never exposed; the record
+/// may be listed but access is gated by accessLevel.
+model Dataset {
+  id                  String          @id @default(uuid())
+  publicId            String          @unique @map("public_id") // RTD-00000001
+  slug                String          @unique
+  title               String
+  description         String?
+  creatorResearcherId String?         @map("creator_researcher_id")
+  institutionId       String?         @map("institution_id")
+  sample              String?
+  geography           String?
+  methodology         String?
+  variablesText       String?            @map("variables_text")
+  fileFormats         String?            @map("file_formats")
+  accessLevel         DatasetAccessLevel @default(open) @map("access_level")
+  licenseCode         String?            @map("license_code")
+  doi                 String?
+  ethicsInfo          String?         @map("ethics_info")
+  version             String?
+  releasedOn          DateTime?       @map("released_on")
+  citationText        String?         @map("citation_text")
+  relatedProjectId    String?         @map("related_project_id")
+  visibility          VisibilityLevel @default(public)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  creator     Researcher?  @relation(fields: [creatorResearcherId], references: [id], onDelete: SetNull)
+  institution Institution? @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  project     Project?     @relation(fields: [relatedProjectId], references: [id], onDelete: SetNull)
+  instruments Instrument[]
+
+  @@index([accessLevel])
+  @@map("datasets")
+}
+
+/// Research instrument / psychometric scale (Spec §21) — strategically
+/// important; carries psychometric metadata.
+model Instrument {
+  id                 String  @id @default(uuid())
+  publicId           String  @unique @map("public_id") // RTI-00000001
+  slug               String  @unique
+  title              String
+  construct          String?
+  population         String?
+  language           String?
+  country            String?
+  itemCount          Int?    @map("item_count")
+  responseScale      String? @map("response_scale")
+  scoringMethod      String? @map("scoring_method")
+  reliability        String?
+  validityEvidence   String? @map("validity_evidence")
+  factorStructure    String? @map("factor_structure")
+  norms              String?
+  translationOf      String? @map("translation_of")
+  copyright          String?
+  licenseCode        String? @map("license_code")
+  doi                String?
+  authorResearcherId String? @map("author_researcher_id")
+  relatedProjectId   String? @map("related_project_id")
+  relatedDatasetId   String? @map("related_dataset_id")
+  visibility         VisibilityLevel @default(public)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  author  Researcher? @relation(fields: [authorResearcherId], references: [id], onDelete: SetNull)
+  project Project?    @relation(fields: [relatedProjectId], references: [id], onDelete: SetNull)
+  dataset Dataset?    @relation(fields: [relatedDatasetId], references: [id], onDelete: SetNull)
+
+  @@map("instruments")
+}
+
+/// Research software / code (Spec §22).
+model Software {
+  id                 String  @id @default(uuid())
+  publicId           String  @unique @map("public_id") // RTS-00000001
+  slug               String  @unique
+  name               String
+  description        String?
+  version            String?
+  authorResearcherId String? @map("author_researcher_id")
+  repositoryUrl      String? @map("repository_url")
+  doi                String?
+  licenseCode        String? @map("license_code")
+  documentationUrl   String? @map("documentation_url")
+  citationText       String? @map("citation_text")
+  relatedProjectId   String? @map("related_project_id")
+  visibility         VisibilityLevel @default(public)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  author  Researcher? @relation(fields: [authorResearcherId], references: [id], onDelete: SetNull)
+  project Project?    @relation(fields: [relatedProjectId], references: [id], onDelete: SetNull)
+
+  @@map("software")
 }
 
 // ============================================================

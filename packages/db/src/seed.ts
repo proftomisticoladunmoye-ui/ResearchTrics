@@ -11,9 +11,15 @@ async function main(): Promise<void> {
   await prisma.$executeRawUnsafe(
     'CREATE SEQUENCE IF NOT EXISTS researcher_rtx_seq START WITH 1 INCREMENT BY 1',
   );
-  await prisma.$executeRawUnsafe(
-    'CREATE SEQUENCE IF NOT EXISTS publication_rtp_seq START WITH 1 INCREMENT BY 1',
-  );
+  for (const seq of [
+    'publication_rtp_seq',
+    'project_rtj_seq',
+    'dataset_rtd_seq',
+    'instrument_rti_seq',
+    'software_rts_seq',
+  ]) {
+    await prisma.$executeRawUnsafe(`CREATE SEQUENCE IF NOT EXISTS ${seq} START WITH 1 INCREMENT BY 1`);
+  }
 
   const institution = await prisma.institution.upsert({
     where: { slug: 'researchtrics-demo-university' },

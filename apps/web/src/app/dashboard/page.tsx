@@ -62,6 +62,12 @@ export default async function DashboardPage() {
             </Link>
             .
           </li>
+          <li>
+            <Link href="/dashboard/outputs" className="text-rt-blue hover:underline">
+              Add a project, dataset, instrument, or software
+            </Link>
+            .
+          </li>
         </ul>
         <p className="mt-4 text-xs text-rt-muted">
           Foundation build — profile, identity, and integration features arrive in subsequent

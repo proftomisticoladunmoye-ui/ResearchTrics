@@ -32,6 +32,20 @@ export async function nextPublicationSerial(client: PrismaClient = prisma): Prom
   return nextSerial('publication_rtp_seq', client);
 }
 
+/** Next serial for project/dataset/instrument/software public IDs (Spec §9). */
+export async function nextOutputSerial(
+  kind: 'project' | 'dataset' | 'instrument' | 'software',
+  client: PrismaClient = prisma,
+): Promise<number> {
+  const seq = {
+    project: 'project_rtj_seq',
+    dataset: 'dataset_rtd_seq',
+    instrument: 'instrument_rti_seq',
+    software: 'software_rts_seq',
+  }[kind];
+  return nextSerial(seq, client);
+}
+
 async function nextSerial(sequence: string, client: PrismaClient): Promise<number> {
   // Sequence name is an internal constant (never user input) — safe to inline.
   const rows = await client.$queryRawUnsafe<Array<{ nextval: bigint }>>(

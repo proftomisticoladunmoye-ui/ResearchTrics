@@ -59,6 +59,14 @@ export class PostgresSearchIndex implements SearchIndex {
         return this.db.institution.count({ where: this.institutionWhere(q, f) });
       case 'journal':
         return this.db.journal.count({ where: this.journalWhere(q, f) });
+      case 'project':
+        return this.db.project.count({ where: this.projectWhere(q) });
+      case 'dataset':
+        return this.db.dataset.count({ where: this.datasetWhere(q) });
+      case 'instrument':
+        return this.db.instrument.count({ where: this.instrumentWhere(q) });
+      case 'software':
+        return this.db.software.count({ where: this.softwareWhere(q) });
     }
   }
 
@@ -131,6 +139,65 @@ export class PostgresSearchIndex implements SearchIndex {
           score: relevanceScore(j.name, q) || 0.3,
         }));
       }
+      case 'project': {
+        const rows = await this.db.project.findMany({
+          where: this.projectWhere(q),
+          take,
+          select: { id: true, title: true, slug: true, status: true },
+        });
+        return rows.map((p) => ({
+          type,
+          id: p.id,
+          title: p.title,
+          subtitle: `Project · ${p.status}`,
+          url: `/projects/${p.slug}`,
+          score: relevanceScore(p.title, q) || 0.3,
+        }));
+      }
+      case 'dataset': {
+        const rows = await this.db.dataset.findMany({
+          where: this.datasetWhere(q),
+          take,
+          select: { id: true, title: true, slug: true, accessLevel: true },
+        });
+        return rows.map((d) => ({
+          type,
+          id: d.id,
+          title: d.title,
+          subtitle: `Dataset · ${d.accessLevel}`,
+          url: `/datasets/${d.slug}`,
+          score: relevanceScore(d.title, q) || 0.3,
+        }));
+      }
+      case 'instrument': {
+        const rows = await this.db.instrument.findMany({
+          where: this.instrumentWhere(q),
+          take,
+          select: { id: true, title: true, slug: true, construct: true },
+        });
+        return rows.map((i) => ({
+          type,
+          id: i.id,
+          title: i.title,
+          ...(i.construct ? { subtitle: i.construct } : {}),
+          url: `/instruments/${i.slug}`,
+          score: relevanceScore(i.title, q) || 0.3,
+        }));
+      }
+      case 'software': {
+        const rows = await this.db.software.findMany({
+          where: this.softwareWhere(q),
+          take,
+          select: { id: true, name: true, slug: true },
+        });
+        return rows.map((s) => ({
+          type,
+          id: s.id,
+          title: s.name,
+          url: `/software/${s.slug}`,
+          score: relevanceScore(s.name, q) || 0.3,
+        }));
+      }
     }
   }
 
@@ -185,6 +252,50 @@ export class PostgresSearchIndex implements SearchIndex {
       where.OR = [
         { name: { contains: q, mode: 'insensitive' } },
         { publisher: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    return where;
+  }
+
+  private projectWhere(q: string): Prisma.ProjectWhereInput {
+    const where: Prisma.ProjectWhereInput = { deletedAt: null, visibility: 'public' };
+    if (q) {
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    return where;
+  }
+
+  private datasetWhere(q: string): Prisma.DatasetWhereInput {
+    const where: Prisma.DatasetWhereInput = { deletedAt: null, visibility: 'public' };
+    if (q) {
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    return where;
+  }
+
+  private instrumentWhere(q: string): Prisma.InstrumentWhereInput {
+    const where: Prisma.InstrumentWhereInput = { deletedAt: null, visibility: 'public' };
+    if (q) {
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { construct: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    return where;
+  }
+
+  private softwareWhere(q: string): Prisma.SoftwareWhereInput {
+    const where: Prisma.SoftwareWhereInput = { deletedAt: null, visibility: 'public' };
+    if (q) {
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
       ];
     }
     return where;

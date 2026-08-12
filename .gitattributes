@@ -1,0 +1,8 @@
+# Normalize line endings across platforms — store LF in the repo.
+* text=auto eol=lf
+
+# Binary / generated
+*.png binary
+*.jpg binary
+*.node binary
+pnpm-lock.yaml -diff

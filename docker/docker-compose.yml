@@ -1,0 +1,133 @@
+# ResearchTrics local stack (Spec §75).
+# Infra services start by default. App containers (web, worker) run under the
+# `apps` profile; during development you typically run those via `pnpm dev`.
+#
+#   docker compose -f docker/docker-compose.yml up -d           # infra only
+#   docker compose -f docker/docker-compose.yml --profile apps up -d --build
+
+name: researchtrics
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: researchtrics
+      POSTGRES_PASSWORD: researchtrics
+      POSTGRES_DB: researchtrics
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./../packages/db/prisma/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U researchtrics -d researchtrics']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # --- OJS editorial layer (fresh install; integrated over API, never merged
+  #     into ResearchTrics — Spec §12). Version pinned; adapter still detects
+  #     the running version at runtime. ---
+  ojs-db:
+    image: mariadb:11
+    environment:
+      MYSQL_DATABASE: ojs
+      MYSQL_USER: ojs
+      MYSQL_PASSWORD: ojs
+      MYSQL_ROOT_PASSWORD: ojsroot
+    volumes:
+      - ojs-db-data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  ojs:
+    image: pkpofficial/ojs:3_4_0-8
+    depends_on:
+      ojs-db:
+        condition: service_healthy
+    environment:
+      OJS_DB_HOST: ojs-db
+      OJS_DB_USER: ojs
+      OJS_DB_PASSWORD: ojs
+      OJS_DB_NAME: ojs
+    ports:
+      - '8081:80'
+    volumes:
+      - ojs-files:/var/www/files
+      - ojs-public:/var/www/html/public
+
+  # --- Application containers (optional; profile: apps) ---
+  web:
+    profiles: ['apps']
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://researchtrics:researchtrics@postgres:5432/researchtrics?schema=public
+      DIRECT_URL: postgresql://researchtrics:researchtrics@postgres:5432/researchtrics?schema=public
+      REDIS_URL: redis://redis:6379
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      SESSION_SECRET: ${SESSION_SECRET:-dev-session-secret-change-me-32chars-min}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-ZGV2LWtleS1jaGFuZ2UtbWUtMzItYnl0ZXMtbG9uZyE=}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - '3000:3000'
+
+  worker:
+    profiles: ['apps']
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://researchtrics:researchtrics@postgres:5432/researchtrics?schema=public
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  ojs-db-data:
+  ojs-files:
+  ojs-public:

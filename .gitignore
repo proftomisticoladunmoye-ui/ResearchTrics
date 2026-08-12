@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+
+# Environment — NEVER commit real secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Prisma
+packages/db/prisma/*.db
+packages/db/prisma/migrations/dev.db*
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Object storage local
+docker/minio-data/
+docker/postgres-data/

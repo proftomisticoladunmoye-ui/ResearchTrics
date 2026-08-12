@@ -1,0 +1,25 @@
+{
+  "name": "@researchtrics/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
+    "@researchtrics/config": "workspace:*",
+    "@researchtrics/db": "workspace:*",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5"
+  }
+}

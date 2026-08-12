@@ -1,0 +1,782 @@
+// ResearchTrics — Prisma schema
+// Phase 1 (Foundation) scope. Aligned with docs/DATABASE-ARCHITECTURE.md.
+// Later phases add: publications, projects, datasets, instruments, software,
+// journals, metrics, rvm_*, ojs_*, sync_*, notifications, etc.
+//
+// Conventions:
+// - Primary keys: uuid (v4 default; v7 preferred once pinned to a Prisma version
+//   that supports uuid(7) across the toolchain).
+// - Provenance on imported records via ExternalRecord (Spec §84).
+// - Soft deletion via deletedAt on scholarly-adjacent records.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+enum UserStatus {
+  active
+  suspended
+  pending
+}
+
+enum RoleType {
+  researcher
+  student_researcher
+  research_assistant
+  research_group_admin
+  institution_admin
+  department_admin
+  journal_editor
+  publisher_admin
+  reviewer
+  research_administrator
+  funder
+  employer
+  platform_admin
+  super_admin
+}
+
+enum ScopeType {
+  global
+  institution
+  department
+  research_group
+  journal
+}
+
+enum ResearcherType {
+  academic
+  independent
+  student
+  research_assistant
+  practitioner
+  other
+}
+
+enum CareerStage {
+  undergraduate
+  graduate
+  doctoral
+  early_career
+  mid_career
+  senior
+  professor
+  research_administrator
+  independent
+}
+
+enum VisibilityLevel {
+  public
+  researchers
+  institution
+  private
+}
+
+enum IdentifierScheme {
+  orcid
+  scopus
+  wos
+  openalex
+  scholar_url
+  ror
+}
+
+enum ExternalSource {
+  crossref
+  orcid
+  openalex
+  ojs
+  datacite
+  user
+}
+
+enum AffiliationRole {
+  faculty
+  postdoc
+  phd_student
+  masters_student
+  research_staff
+  visiting
+  emeritus
+  other
+}
+
+/// Research output types (Spec §9) — not limited to journal articles.
+enum OutputType {
+  journal_article
+  conference_paper
+  conference_proceeding
+  preprint
+  postprint
+  working_paper
+  technical_report
+  research_report
+  thesis
+  dissertation
+  book
+  book_chapter
+  dataset
+  instrument
+  software
+  poster
+  presentation
+  policy_brief
+  research_brief
+  systematic_review
+  meta_analysis
+  registered_report
+  other
+}
+
+/// Version-of-record lineage (Spec §60).
+enum PublicationVersion {
+  preprint
+  accepted_manuscript
+  version_of_record
+  correction
+  retraction
+}
+
+/// Identifier schemes for publications.
+enum PublicationIdScheme {
+  doi
+  pmid
+  pmcid
+  arxiv
+  isbn
+  openalex
+  handle
+}
+
+/// Citation counts are source-labelled and never merged (Spec §33).
+enum CitationSource {
+  crossref
+  openalex
+  scholar
+  scopus
+  wos
+}
+
+/// File access levels (Spec §46, §34).
+enum FileAccessLevel {
+  public
+  restricted
+  request
+  embargoed
+  private
+}
+
+/// Background sync lifecycle (Spec §12, §73).
+enum SyncStatus {
+  pending
+  running
+  completed
+  failed
+  partial
+}
+
+enum SyncKind {
+  manual
+  scheduled
+  webhook
+}
+
+/// How an OJS source is harvested (Spec §12). Detected at runtime, never assumed.
+enum OjsStrategy {
+  oai_pmh
+  native_rest
+}
+
+// ============================================================
+// Identity & accounts
+// ============================================================
+
+/// Auth principal only — NOT the scholarly identity (Spec §7).
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String?    @map("password_hash")
+  status       UserStatus @default(pending)
+  emailVerified Boolean   @default(false) @map("email_verified")
+  mfaEnabled   Boolean    @default(false) @map("mfa_enabled")
+  mfaSecret    String?    @map("mfa_secret")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  sessions           Session[]
+  roles              UserRole[]
+  researcher         Researcher?
+  auditLogs          AuditLog[]
+  verificationTokens VerificationToken[]
+
+  @@index([status])
+  @@map("users")
+}
+
+/// Server-side sessions with rotation support (Spec §35).
+model Session {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  tokenHash   String   @unique @map("token_hash")
+  expiresAt   DateTime @map("expires_at")
+  rotatedFrom String?  @map("rotated_from")
+  ip          String?
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/// RBAC role assignment, scoped to a context (Spec §6, §49).
+model UserRole {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  role      RoleType
+  scopeType ScopeType @default(global) @map("scope_type")
+  scopeId   String?   @map("scope_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role, scopeType, scopeId])
+  @@index([userId])
+  @@map("user_roles")
+}
+
+/// Core scholarly identity — persistent RTX ID (Spec §7).
+model Researcher {
+  id              String  @id @default(uuid())
+  researchtricsId String  @unique @map("researchtrics_id") // RTX-00000001
+  userId          String? @unique @map("user_id")
+
+  givenNames    String?  @map("given_names")
+  familyName    String?  @map("family_name")
+  preferredName String?  @map("preferred_name")
+  displayName   String   @map("display_name")
+  slug          String   @unique
+  biography     String?
+  country       String?
+  city          String?
+  academicRank  String?  @map("academic_rank")
+  website       String?
+  photoUrl      String?  @map("photo_url")
+
+  researcherType     ResearcherType  @default(academic) @map("researcher_type")
+  careerStage        CareerStage?    @map("career_stage")
+  verificationLevel  Int             @default(0) @map("verification_level")
+  profileVisibility  VisibilityLevel @default(public) @map("profile_visibility")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  user                User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  identifiers         ResearcherIdentifier[]
+  nameVariants        ResearcherNameVariant[]
+  affiliations        Affiliation[]
+  interests           ResearchInterest[]
+  verificationRecords VerificationRecord[]
+  orcidConnection     OrcidConnection?
+  authorships         PublicationAuthor[]
+
+  @@index([familyName])
+  @@index([verificationLevel])
+  @@map("researchers")
+}
+
+/// External scholarly identifiers as mappings — internal RTX stays authoritative (Spec §7, §85).
+model ResearcherIdentifier {
+  id           String           @id @default(uuid())
+  researcherId String           @map("researcher_id")
+  scheme       IdentifierScheme
+  value        String
+  verified     Boolean          @default(false)
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  researcher Researcher @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+
+  @@unique([scheme, value])
+  @@index([researcherId])
+  @@map("researcher_identifiers")
+}
+
+/// Name variants for disambiguation — never auto-merge on name alone (Spec §7, §58).
+model ResearcherNameVariant {
+  id           String  @id @default(uuid())
+  researcherId String  @map("researcher_id")
+  name         String
+  script       String?
+  source       String?
+
+  researcher Researcher @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+
+  @@index([researcherId])
+  @@map("researcher_name_variants")
+}
+
+// ============================================================
+// Organizations
+// ============================================================
+
+model Institution {
+  id        String  @id @default(uuid())
+  name      String
+  slug      String  @unique
+  rorId     String? @unique @map("ror_id")
+  country   String?
+  city      String?
+  type      String?
+  isTenant  Boolean @default(false) @map("is_tenant")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  departments  Department[]
+  affiliations Affiliation[]
+
+  @@index([country])
+  @@map("institutions")
+}
+
+model Department {
+  id                 String  @id @default(uuid())
+  institutionId      String  @map("institution_id")
+  name               String
+  parentDepartmentId String? @map("parent_department_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  institution      Institution  @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  parentDepartment Department?  @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id], onDelete: SetNull)
+  children         Department[] @relation("DepartmentHierarchy")
+  affiliations     Affiliation[]
+
+  @@index([institutionId])
+  @@map("departments")
+}
+
+/// Time-bounded M:N — verified affiliations never overwritten blindly (Spec §85).
+model Affiliation {
+  id            String          @id @default(uuid())
+  researcherId  String          @map("researcher_id")
+  institutionId String          @map("institution_id")
+  departmentId  String?         @map("department_id")
+  role          AffiliationRole @default(faculty)
+  startDate     DateTime?       @map("start_date")
+  endDate       DateTime?       @map("end_date")
+  isPrimary     Boolean         @default(false) @map("is_primary")
+  verified      Boolean         @default(false)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  researcher  Researcher  @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  department  Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([researcherId])
+  @@index([institutionId])
+  @@map("affiliations")
+}
+
+// ============================================================
+// Identity: interests, verification, ORCID (Phase 2 — Spec §7, §13, §38)
+// ============================================================
+
+/// Free-text research interests (Spec §7, §8).
+model ResearchInterest {
+  id           String   @id @default(uuid())
+  researcherId String   @map("researcher_id")
+  label        String
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  researcher Researcher @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+
+  @@unique([researcherId, label])
+  @@index([researcherId])
+  @@map("research_interests")
+}
+
+/// Auditable verification history (Spec §38). Levels 0..5; honestly labelled.
+model VerificationRecord {
+  id           String   @id @default(uuid())
+  researcherId String   @map("researcher_id")
+  level        Int
+  method       String
+  evidenceRef  String?  @map("evidence_ref")
+  verifiedById String?  @map("verified_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  researcher Researcher @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+
+  @@index([researcherId])
+  @@map("verification_records")
+}
+
+/// ORCID OAuth connection. Tokens are ENCRYPTED at rest and never exposed to
+/// the frontend (Spec §13, §35).
+model OrcidConnection {
+  id                String    @id @default(uuid())
+  researcherId      String    @unique @map("researcher_id")
+  orcid             String    @unique
+  accessTokenEnc    String    @map("access_token_enc")
+  refreshTokenEnc   String?   @map("refresh_token_enc")
+  scope             String?
+  tokenExpiresAt    DateTime? @map("token_expires_at")
+  connectedAt       DateTime  @default(now()) @map("connected_at")
+  lastSyncedAt      DateTime? @map("last_synced_at")
+
+  researcher Researcher @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+
+  @@map("orcid_connections")
+}
+
+/// Single-use tokens for email verification / password reset (Spec §38, §40).
+/// Only the hash of the token is stored.
+model VerificationToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  purpose   String
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("verification_tokens")
+}
+
+// ============================================================
+// Publications & outputs (Phase 3 — Spec §9, §10, §33, §60)
+// ============================================================
+
+model Journal {
+  id             String  @id @default(uuid())
+  name           String
+  slug           String  @unique
+  issnPrint      String? @map("issn_print")
+  issnElectronic String? @map("issn_electronic")
+  publisher      String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  publications Publication[]
+
+  @@index([name])
+  @@map("journals")
+}
+
+/// A scholarly publication — a first-class graph node, never an isolated PDF (Spec §1, §10).
+model Publication {
+  id          String             @id @default(uuid())
+  publicId    String             @unique @map("public_id") // RTP-00000001
+  slug        String             @unique
+  title       String
+  abstract    String?
+  outputType  OutputType         @default(journal_article) @map("output_type")
+  versionType PublicationVersion @default(version_of_record) @map("version_type")
+
+  journalId   String?  @map("journal_id")
+  volume      String?
+  issue       String?
+  firstPage   String?  @map("first_page")
+  lastPage    String?  @map("last_page")
+  publishedOn DateTime? @map("published_on")
+  publishedYear Int?    @map("published_year")
+  publisher   String?
+  articleType String?  @map("article_type")
+
+  licenseCode String?  @map("license_code")
+  openAccess  Boolean  @default(false) @map("open_access")
+  pdfUrl      String?  @map("pdf_url")
+  primaryFileId String? @unique @map("primary_file_id")
+
+  visibility VisibilityLevel @default(public)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  journal        Journal?                  @relation(fields: [journalId], references: [id], onDelete: SetNull)
+  primaryFile    File?                     @relation("PrimaryFile", fields: [primaryFileId], references: [id], onDelete: SetNull)
+  identifiers    PublicationIdentifier[]
+  authors        PublicationAuthor[]
+  citationCounts PublicationCitationCount[]
+
+  @@index([publishedYear])
+  @@index([journalId])
+  @@map("publications")
+}
+
+model PublicationIdentifier {
+  id            String              @id @default(uuid())
+  publicationId String              @map("publication_id")
+  scheme        PublicationIdScheme
+  value         String
+  createdAt     DateTime            @default(now()) @map("created_at")
+
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@unique([scheme, value])
+  @@index([publicationId])
+  @@map("publication_identifiers")
+}
+
+/// Ordered authorship. Researcher link is nullable + confidence-scored; every
+/// author renders even when unmatched (Spec §58).
+model PublicationAuthor {
+  id              String  @id @default(uuid())
+  publicationId   String  @map("publication_id")
+  researcherId    String? @map("researcher_id")
+  authorOrder     Int     @map("author_order")
+  rawName         String  @map("raw_name")
+  givenName       String? @map("given_name")
+  familyName      String? @map("family_name")
+  affiliationText String? @map("affiliation_text")
+  orcid           String?
+  isCorresponding Boolean @default(false) @map("is_corresponding")
+  matchConfidence Float?  @map("match_confidence")
+
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  researcher  Researcher? @relation(fields: [researcherId], references: [id], onDelete: SetNull)
+
+  @@unique([publicationId, authorOrder])
+  @@index([publicationId])
+  @@index([researcherId])
+  @@map("publication_authors")
+}
+
+/// Source-labelled citation counts — never merged across providers (Spec §33).
+model PublicationCitationCount {
+  id            String         @id @default(uuid())
+  publicationId String         @map("publication_id")
+  source        CitationSource
+  count         Int            @default(0)
+  asOf          DateTime       @default(now()) @map("as_of")
+
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@unique([publicationId, source])
+  @@index([publicationId])
+  @@map("publication_citation_counts")
+}
+
+/// Object-storage file reference — never store blobs in Postgres (Spec §46).
+model File {
+  id            String          @id @default(uuid())
+  storageKey    String          @unique @map("storage_key")
+  filename      String
+  mimeType      String          @map("mime_type")
+  sizeBytes     Int             @map("size_bytes")
+  checksumSha256 String         @map("checksum_sha256")
+  accessLevel   FileAccessLevel @default(public) @map("access_level")
+  licenseCode   String?         @map("license_code")
+  pdfHasText    Boolean?        @map("pdf_has_text")
+  uploaderId    String?         @map("uploader_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  primaryForPublication Publication? @relation("PrimaryFile")
+
+  @@index([uploaderId])
+  @@map("files")
+}
+
+// ============================================================
+// OJS integration & sync (Phase 4 — Spec §12)
+// ============================================================
+
+/// A connected OJS installation. Version + strategy are DETECTED at runtime and
+/// stored here — never hard-coded (Spec §12).
+model OjsSource {
+  id               String       @id @default(uuid())
+  name             String
+  baseUrl          String       @map("base_url")
+  siteId           String?      @map("site_id")
+  versionDetected  String?      @map("version_detected")
+  strategy         OjsStrategy?
+  oaiUrl           String?      @map("oai_url")
+  restApiAvailable Boolean      @default(false) @map("rest_api_available")
+  apiTokenEnc      String?      @map("api_token_enc")
+  enabled          Boolean      @default(true)
+  lastProbedAt     DateTime?    @map("last_probed_at")
+  lastSyncedAt     DateTime?    @map("last_synced_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  journals OjsJournal[]
+  articles OjsArticle[]
+  authors  OjsAuthor[]
+  syncJobs SyncJob[]
+
+  @@unique([baseUrl])
+  @@map("ojs_sources")
+}
+
+/// Mapping: OJS journal → internal Journal (idempotent, no duplicates — Spec §12).
+model OjsJournal {
+  id                String  @id @default(uuid())
+  ojsSourceId       String  @map("ojs_source_id")
+  ojsJournalId      String  @map("ojs_journal_id")
+  ojsJournalPath    String? @map("ojs_journal_path")
+  internalJournalId String? @map("internal_journal_id")
+  title             String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  source OjsSource @relation(fields: [ojsSourceId], references: [id], onDelete: Cascade)
+
+  @@unique([ojsSourceId, ojsJournalId])
+  @@index([ojsSourceId])
+  @@map("ojs_journals")
+}
+
+/// Mapping: OJS article → internal Publication (idempotent — Spec §12).
+model OjsArticle {
+  id                    String   @id @default(uuid())
+  ojsSourceId           String   @map("ojs_source_id")
+  ojsArticleId          String   @map("ojs_article_id")
+  ojsJournalId          String?  @map("ojs_journal_id")
+  internalPublicationId String?  @map("internal_publication_id")
+  doi                   String?
+  lastRecordHash        String?  @map("last_record_hash")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  source OjsSource @relation(fields: [ojsSourceId], references: [id], onDelete: Cascade)
+
+  @@unique([ojsSourceId, ojsArticleId])
+  @@index([ojsSourceId])
+  @@map("ojs_articles")
+}
+
+/// Mapping: OJS author → internal Researcher (confidence-based; never overwrite
+/// verified identity — Spec §12, §58).
+model OjsAuthor {
+  id                 String  @id @default(uuid())
+  ojsSourceId        String  @map("ojs_source_id")
+  ojsAuthorKey       String  @map("ojs_author_key")
+  internalResearcherId String? @map("internal_researcher_id")
+  rawName            String  @map("raw_name")
+  orcid              String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  source OjsSource @relation(fields: [ojsSourceId], references: [id], onDelete: Cascade)
+
+  @@unique([ojsSourceId, ojsAuthorKey])
+  @@index([ojsSourceId])
+  @@map("ojs_authors")
+}
+
+/// A sync run (manual/scheduled/webhook) with retry + status (Spec §12, §73).
+model SyncJob {
+  id          String     @id @default(uuid())
+  integration String
+  kind        SyncKind   @default(manual)
+  status      SyncStatus @default(pending)
+  ojsSourceId String?    @map("ojs_source_id")
+  scheduledAt DateTime?  @map("scheduled_at")
+  startedAt   DateTime?  @map("started_at")
+  finishedAt  DateTime?  @map("finished_at")
+  processed   Int        @default(0)
+  created     Int        @default(0)
+  updated     Int        @default(0)
+  failed      Int        @default(0)
+  error       String?
+  idempotencyKey String? @unique @map("idempotency_key")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  source OjsSource? @relation(fields: [ojsSourceId], references: [id], onDelete: SetNull)
+  logs   SyncLog[]
+
+  @@index([status])
+  @@index([ojsSourceId])
+  @@map("sync_jobs")
+}
+
+model SyncLog {
+  id        String   @id @default(uuid())
+  syncJobId String   @map("sync_job_id")
+  level     String   @default("info")
+  message   String
+  entityRef String?  @map("entity_ref")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  job SyncJob @relation(fields: [syncJobId], references: [id], onDelete: Cascade)
+
+  @@index([syncJobId])
+  @@map("sync_logs")
+}
+
+// ============================================================
+// Provenance & audit (Spec §84, §68)
+// ============================================================
+
+/// The provenance spine — one row per external observation of an entity (Spec §84).
+model ExternalRecord {
+  id                String         @id @default(uuid())
+  entityType        String         @map("entity_type")
+  entityId          String         @map("entity_id")
+  source            ExternalSource
+  sourceId          String         @map("source_id")
+  sourceUrl         String?        @map("source_url")
+  retrievedAt       DateTime       @map("retrieved_at")
+  lastSyncedAt      DateTime?      @map("last_synced_at")
+  confidence        Float          @default(1)
+  rawPayload        Json?          @map("raw_payload")
+  normalizedPayload Json?          @map("normalized_payload")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([source, sourceId, entityType, entityId])
+  @@index([entityType, entityId])
+  @@index([source, sourceId])
+  @@map("external_records")
+}
+
+/// Append-only audit trail — no silent destructive edits (Spec §68).
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?  @map("actor_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  before     Json?
+  after      Json?
+  ip         String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

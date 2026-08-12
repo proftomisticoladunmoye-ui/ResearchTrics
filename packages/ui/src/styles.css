@@ -1,0 +1,23 @@
+/*
+ * ResearchTrics design-system base variables (Spec §96).
+ * Mirrors packages/config/src/tokens.ts — the TS tokens remain the source of
+ * truth; this file exposes the same --rt-* contract to plain CSS consumers.
+ */
+:root {
+  --rt-blue: #0b3a82;
+  --rt-blue-dark: #082b61;
+  --rt-blue-royal: #1456a0;
+  --rt-blue-light: #eef5ff;
+  --rt-gold: #c9a227;
+  --rt-gold-light: #e6d28a;
+  --rt-gold-dark: #9a7610;
+  --rt-white: #ffffff;
+  --rt-background: #f7f9fc;
+  --rt-text: #172033;
+  --rt-muted: #5e6878;
+  --rt-border: #dce3ed;
+  --rt-success: #1f7a4d;
+  --rt-warning: #b7791f;
+  --rt-error: #c53030;
+  --rt-info: #2563eb;
+}

@@ -23,3 +23,4 @@ export * from './rvm-service';
 export * from './analytics';
 export * from './collaboration';
 export * from './groups';
+export * from './ai-intelligence';

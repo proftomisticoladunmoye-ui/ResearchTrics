@@ -163,6 +163,33 @@ async function main() {
     const after2 = await core.getGroupBySlug(grp.slug);
     check('member added to group', after2?.members.length === 2);
 
+    console.log('\nAI Research Intelligence (grounded, on-platform)');
+    const intel = await core.getResearcherIntelligence(reg.researcher.id);
+    check(
+      'profile summary is generated on-platform by default',
+      intel.summary.providerName === 'local' && intel.summary.external === false,
+      `provider=${intel.summary.providerName}`,
+    );
+    check(
+      'summary is grounded in real records (mentions the researcher)',
+      intel.summary.generation.text.includes('Ada Lovelace'),
+      intel.summary.generation.text.slice(0, 80),
+    );
+    const factRefs = new Set(intel.summary.facts.map((f) => f.ref));
+    check(
+      'no fabrication — every cited source is a provided record (Spec §29)',
+      intel.summary.generation.sources.every((s) => factRefs.has(s)),
+    );
+    check(
+      'expertise extracted from stated interests',
+      intel.expertise.some((t) => t.term === 'psychometrics'),
+      intel.expertise.map((t) => t.term).join(', '),
+    );
+    check(
+      'every expertise term is explained by evidence (Spec §29)',
+      intel.expertise.length > 0 && intel.expertise.every((t) => t.evidence.length > 0),
+    );
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

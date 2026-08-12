@@ -29,6 +29,12 @@ const serverEnvSchema = z.object({
   OBJECT_STORAGE_BUCKET: z.string().optional(),
   OBJECT_STORAGE_KEY: z.string().optional(),
   OBJECT_STORAGE_SECRET: z.string().optional(),
+
+  // AI Research Intelligence (Spec §29, §48). Grounded, provider-agnostic.
+  // Defaults to the on-platform provider — no key needed, no data leaves.
+  AI_PROVIDER: z.enum(['local', 'claude']).default('local'),
+  AI_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().default('claude-opus-5'),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

@@ -1,5 +1,5 @@
 {
-  "name": "@researchtrics/core",
+  "name": "@researchtrics/ai",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,11 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@node-rs/argon2": "^2.0.2",
-    "@researchtrics/config": "workspace:*",
-    "@researchtrics/db": "workspace:*",
-    "pino": "^9.5.0",
-    "@researchtrics/ai": "workspace:*"
+    "@anthropic-ai/sdk": "^0.116.0"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

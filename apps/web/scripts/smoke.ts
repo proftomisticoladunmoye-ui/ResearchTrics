@@ -505,6 +505,23 @@ async function main() {
     const counts = await core.citationCountsBySource('10.9/uni.1');
     check('citation counts stay source-distinguishable, never merged (§30)', counts.crossref === 1 && counts.openalex === 1, JSON.stringify(counts));
 
+    console.log('\nFederation ops: health, data quality, visibility audit, unified read (§34/§40/§42/§29)');
+    const healthStub = [
+      { name: 'crossref', external: true, capabilities: ['healthCheck'] as const, healthCheck: async () => ({ provider: 'crossref', status: 'healthy' as const, latencyMs: 42, checkedAt: wnow }) },
+      { name: 'pubmed', external: true, capabilities: ['healthCheck'] as const, healthCheck: async () => ({ provider: 'pubmed', status: 'down' as const, checkedAt: wnow, error: 'unreachable' }) },
+    ] as never;
+    const healthReport = await core.federationHealthReport(healthStub);
+    check('source-health report probes each provider (§34)', healthReport.length === 2 && healthReport.some((h: { status: string }) => h.status === 'healthy') && healthReport.some((h: { status: string }) => h.status === 'down'));
+
+    const dq = await core.dataQualityReport();
+    check('data-quality report yields a 0..100 score + metrics (§42)', dq.score >= 0 && dq.score <= 100 && dq.metrics.length >= 5, `score=${dq.score} metrics=${dq.metrics.length}`);
+
+    const audit = await core.researchVisibilityAudit(reg.researcher.id);
+    check('visibility audit returns grounded coverage + recommendations (§40)', typeof audit.coverage.publications === 'number' && Array.isArray(audit.gaps) && Array.isArray(audit.recommendations));
+
+    const uWork = await core.getUnifiedWorkByPublicId(uni.publicId);
+    check('unified work is readable by public id with field provenance (§29)', uWork?.publicId === uni.publicId && (uWork?.fieldProvenance.length ?? 0) > 0);
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

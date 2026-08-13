@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { prisma } from '@researchtrics/db';
-import { listDiscoveryRuns } from '@researchtrics/core';
-import { Card, Badge } from '@researchtrics/ui';
+import { listDiscoveryRuns, discoveryGrowthMetrics } from '@researchtrics/core';
+import { Card, Badge, MetricCard } from '@researchtrics/ui';
 import { DiscoveryRunForm } from '@/components/discovery-run-form';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +14,7 @@ const RUN_BADGE: Record<string, 'success' | 'warning' | 'error' | 'neutral'> = {
 };
 
 export default async function AdminDiscoveryPage() {
-  const [runs, discovered] = await Promise.all([
+  const [runs, discovered, metrics] = await Promise.all([
     listDiscoveryRuns(15),
     prisma.researcher.findMany({
       where: { deletedAt: null, profileStatus: 'unclaimed' },
@@ -22,6 +22,7 @@ export default async function AdminDiscoveryPage() {
       orderBy: { createdAt: 'desc' },
       take: 30,
     }),
+    discoveryGrowthMetrics(),
   ]);
 
   return (
@@ -33,6 +34,29 @@ export default async function AdminDiscoveryPage() {
           <strong>unclaimed</strong> and provenance-backed — never presented as verified.
         </p>
       </div>
+
+      {/* Growth metrics (§40) — grounded counts from real records */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <MetricCard label="Discovered" value={metrics.totalDiscovered} />
+        <MetricCard label="Unclaimed" value={metrics.byStatus['unclaimed'] ?? 0} />
+        <MetricCard label="Claimed" value={metrics.claimed} />
+        <MetricCard label="Verified" value={metrics.verified} emphasis="gold" />
+        <MetricCard label="Suppressed" value={metrics.suppressed} />
+      </div>
+      {metrics.bySource.length > 0 ? (
+        <Card className="p-6">
+          <h2 className="text-base font-semibold text-rt-text">By source</h2>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {metrics.bySource.map((s) => (
+              <li key={s.source}>
+                <Badge variant="outline">
+                  {s.source}: {s.count}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       <Card className="p-6">
         <h2 className="text-base font-semibold text-rt-text">Discover</h2>

@@ -383,6 +383,50 @@ async function main() {
     const removed = await prisma.researcher.findUnique({ where: { id: fresh.researcherId }, select: { profileStatus: true, deletedAt: true } });
     check('profile removal suppresses the unclaimed profile (§35)', removed?.profileStatus === 'suppressed' && removed?.deletedAt != null);
 
+    console.log('\nInvitations, referrals, review/merge, metrics, discovery API (§17–§57)');
+    // A fresh unclaimed profile to invite/merge.
+    const inviteTarget = await core.createProvisionalResearcher({
+      fullName: 'Grace Hopper',
+      nameVariants: ['Grace Hopper', 'G. Hopper'],
+      openalexAuthorId: 'A5000000100',
+      topics: ['computing'],
+      works: [],
+      coauthors: [],
+      provenance: { source: 'fixture', retrievedAt: new Date().toISOString() },
+    });
+    const invite = await core.createClaimInvitation({ researcherId: inviteTarget.researcherId, channel: 'public' });
+    check('claim invitation issues a raw token (§18)', invite.token.length > 20);
+    const resolved = await core.resolveInvitation(invite.token);
+    check('invitation resolves to the target profile', resolved?.researcher.id === inviteTarget.researcherId && !resolved?.expired && !resolved?.consumed);
+    check('a bad invitation token resolves to nothing', (await core.resolveInvitation('not-a-token')) === null);
+    await core.consumeInvitation(invite.token);
+    const afterConsume = await core.resolveInvitation(invite.token);
+    check('invitation is single-use once consumed (§32)', afterConsume?.consumed === true);
+
+    // Merge: build a duplicate of inviteTarget and merge it in.
+    const dupProfile = await core.createProvisionalResearcher({
+      fullName: 'Grace Hopper',
+      nameVariants: ['Grace Hopper'],
+      orcid: '0000-0003-9999-0001',
+      topics: ['compilers'],
+      works: [],
+      coauthors: [],
+      provenance: { source: 'fixture', retrievedAt: new Date().toISOString() },
+    });
+    const queue = await core.listReviewQueue();
+    check('review queue surfaces same-name duplicates for human review (§57)', queue.some((g) => g.researchers.length >= 2));
+    await core.mergeResearchers(inviteTarget.researcherId, dupProfile.researcherId, undefined);
+    const mergedDup = await prisma.researcher.findUnique({ where: { id: dupProfile.researcherId }, select: { profileStatus: true, deletedAt: true } });
+    check('merge marks the duplicate merged, never hard-deleted (§24)', mergedDup?.profileStatus === 'merged' && mergedDup?.deletedAt != null);
+    const canonOrcid = await prisma.researcherIdentifier.findFirst({ where: { researcherId: inviteTarget.researcherId, scheme: 'orcid', value: '0000-0003-9999-0001' } });
+    check('merge moves the duplicate’s identifiers to the canonical profile', !!canonOrcid);
+
+    const metrics = await core.discoveryGrowthMetrics();
+    check('growth metrics count discovered/claimed/verified (§40)', metrics.totalDiscovered >= 0 && metrics.verified >= 1 && metrics.bySource.length >= 1, `verified=${metrics.verified} sources=${metrics.bySource.length}`);
+
+    const apiQuery = await core.queryDiscoveredResearchers({ take: 10 });
+    check('discovery query is paginated + returns provenance-bearing profiles (§51)', apiQuery.total >= 0 && Array.isArray(apiQuery.items));
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

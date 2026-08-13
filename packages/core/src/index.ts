@@ -29,5 +29,7 @@ export * from './opportunities';
 export * from './graph';
 export * from './discovery';
 export * from './claiming';
+export * from './invitations';
+export * from './review';
 // Re-export the discovery toolkit (provider interface, identity report, tokens).
 export * from '@researchtrics/discovery';

@@ -12,6 +12,7 @@ import {
   OrcidBadge,
 } from '@researchtrics/ui';
 import { getCurrentUser } from '@/lib/current-user';
+import { ReferButton } from '@/components/refer-button';
 import { track } from '@/lib/track';
 import { ConnectButton } from '@/components/connect-button';
 
@@ -113,6 +114,7 @@ export default async function ResearcherProfilePage({
               >
                 This isn&rsquo;t me
               </Link>
+              {viewer ? <ReferButton researcherId={r.id} /> : null}
             </div>
           </div>
         </div>

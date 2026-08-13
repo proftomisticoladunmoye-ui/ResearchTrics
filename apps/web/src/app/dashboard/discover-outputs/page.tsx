@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { discoverResearchOutputs } from '@researchtrics/core';
+import { discoverResearchOutputs, getBiomedicalFootprint } from '@researchtrics/core';
 import { Card, Badge, Alert } from '@researchtrics/ui';
 import { getCurrentUser } from '@/lib/current-user';
 
@@ -16,7 +16,10 @@ export default async function DiscoverOutputsPage() {
   if (!user) redirect('/login');
   if (!user.researcher) redirect('/dashboard');
 
-  const { orcid, provider, outputs } = await discoverResearchOutputs(user.researcher.id);
+  const [{ orcid, provider, outputs }, footprint] = await Promise.all([
+    discoverResearchOutputs(user.researcher.id),
+    getBiomedicalFootprint(user.researcher.id),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
@@ -80,6 +83,42 @@ export default async function DiscoverOutputsPage() {
           ))}
         </ul>
       )}
+
+      {/* Biomedical research footprint (§27) — a footprint, never a quality score */}
+      <Card className="mt-8 p-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-rt-text">Biomedical research footprint</h2>
+          <Badge variant={footprint.indicator === 'present' ? 'neutral' : 'outline'}>
+            {footprint.indicator === 'present' ? `${footprint.count} PubMed record${footprint.count === 1 ? '' : 's'}` : 'None found'}
+          </Badge>
+        </div>
+        <p className="mt-1 text-xs text-rt-muted">
+          Publications indexed in PubMed under your name, from{' '}
+          <span className="font-mono">{footprint.provider}</span>. This is a footprint indicator —
+          <strong> not a quality score</strong>.
+        </p>
+        {footprint.works.length > 0 ? (
+          <ul className="mt-3 divide-y divide-rt-border">
+            {footprint.works.map((w) => (
+              <li key={w.externalIds.pmid ?? w.title} className="py-2 text-sm">
+                <span className="text-rt-text">{w.title}</span>
+                <div className="mt-1 flex flex-wrap gap-1 text-xs text-rt-muted">
+                  {w.externalIds.pmid ? <span className="font-mono">PMID {w.externalIds.pmid}</span> : null}
+                  {w.externalIds.pmcid ? <span className="font-mono">· {w.externalIds.pmcid}</span> : null}
+                  {(w.publicationTypes ?? []).slice(0, 2).map((t) => (
+                    <span key={t}>· {t}</span>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-sm text-rt-muted">
+            No PubMed records found. When PubMed is configured, biomedical/health publications under
+            your name will appear here.
+          </p>
+        )}
+      </Card>
     </div>
   );
 }

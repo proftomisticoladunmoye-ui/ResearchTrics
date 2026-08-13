@@ -86,6 +86,10 @@ export interface NormalizedWork {
   licenseCode?: string | undefined;
   externalIds: WorkExternalIds;
   authors: NormalizedWorkAuthor[];
+  /** Topic tags / subjects / MeSH terms, when the source provides them (§7, §27). */
+  keywords?: string[] | undefined;
+  /** Publication types (e.g. PubMed pubtypes), when available. */
+  publicationTypes?: string[] | undefined;
   /** Source-specific citation count — NEVER merged across sources (§30). */
   citationCount?: number | undefined;
   provenance: {

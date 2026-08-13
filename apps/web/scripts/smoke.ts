@@ -444,6 +444,19 @@ async function main() {
     check('discovered outputs carry DataCite provenance (§38)', outputs.outputs.every((o) => o.provenance.source === 'datacite'));
     check('research-output discovery uses the researcher’s ORCID', outputs.orcid === '0000-0002-1111-2222', `orcid=${outputs.orcid}`);
 
+    const pubmedStub = {
+      name: 'pubmed',
+      external: true,
+      capabilities: ['search', 'healthCheck'] as const,
+      healthCheck: async () => ({ provider: 'pubmed', status: 'healthy' as const, checkedAt: now2 }),
+      searchWorks: async () => [
+        { source: 'pubmed', resourceType: 'publication' as const, title: 'Resilience and coping in clinical populations', externalIds: { pmid: '12345678', pmcid: 'PMC7654321', doi: '10.1000/health.1' }, authors: [{ rawName: 'Ada Lovelace' }], publicationTypes: ['Journal Article'], provenance: { source: 'pubmed', sourceId: '12345678', sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/12345678/', retrievedAt: now2 } },
+      ],
+    };
+    const footprint = await core.getBiomedicalFootprint(prov1.researcherId, { provider: pubmedStub });
+    check('biomedical footprint counts PubMed records (§27)', footprint.count === 1 && footprint.indicator === 'present', `count=${footprint.count}`);
+    check('PubMed records carry PMID + provenance (§6/§38)', footprint.works.every((w) => !!w.externalIds.pmid && w.provenance.source === 'pubmed'));
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

@@ -4,14 +4,16 @@ import type { ScholarlyMetadataProvider } from './types';
 import { CrossrefMetadataProvider } from './crossref-provider';
 import { OpenAlexMetadataProvider } from './openalex-provider';
 import { DataCiteMetadataProvider, type DataCiteConfig } from './datacite-provider';
+import { PubMedMetadataProvider, type PubMedConfig } from './pubmed-provider';
 
-/** Federation providers available so far (more adapters land in F3–F4). */
-export type FederationProviderName = 'crossref' | 'openalex' | 'datacite';
+/** Federation providers available so far (ROR lands in F4). */
+export type FederationProviderName = 'crossref' | 'openalex' | 'datacite' | 'pubmed';
 
 export interface FederationConfig {
   crossref?: CrossrefConfig | undefined;
   openalex?: OpenAlexConfig | undefined;
   datacite?: DataCiteConfig | undefined;
+  pubmed?: PubMedConfig | undefined;
   /** Injectable HTTP for tests; defaults to global fetch. */
   fetchImpl?: typeof fetch | undefined;
 }
@@ -31,6 +33,8 @@ export function createFederationProvider(
       return new OpenAlexMetadataProvider(config.openalex ?? { baseUrl: 'https://api.openalex.org' }, fetchImpl);
     case 'datacite':
       return new DataCiteMetadataProvider(config.datacite ?? {}, fetchImpl);
+    case 'pubmed':
+      return new PubMedMetadataProvider(config.pubmed ?? {}, fetchImpl);
     case 'crossref':
     default:
       return new CrossrefMetadataProvider(config.crossref ?? { baseUrl: 'https://api.crossref.org' }, fetchImpl);
@@ -43,5 +47,6 @@ export function allFederationProviders(config: FederationConfig = {}): Scholarly
     createFederationProvider('crossref', config),
     createFederationProvider('openalex', config),
     createFederationProvider('datacite', config),
+    createFederationProvider('pubmed', config),
   ];
 }

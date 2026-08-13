@@ -116,7 +116,7 @@ describe('createFederationProvider factory (§2)', () => {
     expect(createFederationProvider('crossref').name).toBe('crossref');
     expect(createFederationProvider('openalex').external).toBe(true);
     const all = allFederationProviders();
-    expect(all.map((p) => p.name).sort()).toEqual(['crossref', 'datacite', 'openalex']);
+    expect(all.map((p) => p.name).sort()).toEqual(['crossref', 'datacite', 'openalex', 'pubmed']);
     expect(all.every((p) => p.capabilities.includes('healthCheck'))).toBe(true);
   });
 });

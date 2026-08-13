@@ -15,6 +15,8 @@ export type Permission =
   | 'institution:manage'
   | 'publication:create'
   | 'publication:update:any'
+  | 'opportunity:create'
+  | 'opportunity:manage'
   | 'admin:access'
   | 'admin:rvm:configure'
   | 'admin:integrations:manage'
@@ -50,14 +52,22 @@ const ROLE_PERMISSIONS: Record<RoleType, Permission[]> = {
     'institution:read',
     'institution:manage',
     'researcher:verify',
+    'opportunity:create',
+    'opportunity:manage',
   ],
   department_admin: ['researcher:read', 'institution:read'],
   journal_editor: ['researcher:read', 'publication:create', 'institution:read'],
   publisher_admin: ['researcher:read', 'publication:create', 'publication:update:any'],
   reviewer: ['researcher:read'],
-  research_administrator: ['researcher:read', 'institution:read', 'institution:manage'],
-  funder: ['researcher:read', 'institution:read'],
-  employer: ['researcher:read'],
+  research_administrator: [
+    'researcher:read',
+    'institution:read',
+    'institution:manage',
+    'opportunity:create',
+    'opportunity:manage',
+  ],
+  funder: ['researcher:read', 'institution:read', 'opportunity:create', 'opportunity:manage'],
+  employer: ['researcher:read', 'opportunity:create', 'opportunity:manage'],
   platform_admin: [
     'researcher:read',
     'researcher:update:any',
@@ -66,6 +76,8 @@ const ROLE_PERMISSIONS: Record<RoleType, Permission[]> = {
     'institution:manage',
     'publication:create',
     'publication:update:any',
+    'opportunity:create',
+    'opportunity:manage',
     'admin:access',
     'admin:integrations:manage',
     'audit:read',
@@ -78,6 +90,8 @@ const ROLE_PERMISSIONS: Record<RoleType, Permission[]> = {
     'institution:manage',
     'publication:create',
     'publication:update:any',
+    'opportunity:create',
+    'opportunity:manage',
     'admin:access',
     'admin:rvm:configure',
     'admin:integrations:manage',

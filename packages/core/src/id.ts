@@ -2,6 +2,7 @@ import {
   RESEARCHTRICS_ID_PREFIX,
   RESEARCHTRICS_ID_PAD,
   OUTPUT_ID_PREFIXES,
+  OPPORTUNITY_ID_PREFIX,
 } from '@researchtrics/config';
 
 /**
@@ -21,6 +22,14 @@ export function formatOutputId(kind: keyof typeof OUTPUT_ID_PREFIXES, serial: nu
     throw new Error(`Invalid output serial: ${serial}`);
   }
   return `${OUTPUT_ID_PREFIXES[kind]}-${String(serial).padStart(RESEARCHTRICS_ID_PAD, '0')}`;
+}
+
+/** Format a public opportunity ID (Phase 13). Example: 7 -> "RTO-00000007". */
+export function formatOpportunityId(serial: number): string {
+  if (!Number.isInteger(serial) || serial < 1) {
+    throw new Error(`Invalid opportunity serial: ${serial}`);
+  }
+  return `${OPPORTUNITY_ID_PREFIX}-${String(serial).padStart(RESEARCHTRICS_ID_PAD, '0')}`;
 }
 
 /**

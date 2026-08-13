@@ -56,7 +56,7 @@ async function main() {
   await client.connect();
   await client.query(migrationSql);
   await client.end();
-  console.log('Migration applied (36 tables).\n');
+  console.log('Migration applied.\n');
 
   // Dynamic imports AFTER env + DB are ready (prisma reads DATABASE_URL on init).
   const core = await import('@researchtrics/core');
@@ -225,6 +225,44 @@ async function main() {
     check('admin verify confirms the affiliation', ov2.pendingAffiliationCount === 0 && ov2.verifiedAffiliationCount === 2, `pending=${ov2.pendingAffiliationCount} verified=${ov2.verifiedAffiliationCount}`);
     const verifiedResearcher = await prisma.researcher.findUnique({ where: { id: reg2.researcher.id }, select: { verificationLevel: true } });
     check('verifying raises identity to institution level (Spec §38)', (verifiedResearcher?.verificationLevel ?? 0) >= 2, `level=${verifiedResearcher?.verificationLevel}`);
+
+    console.log('\nOpportunities (provenance + explainable matching)');
+    const funderActor = {
+      userId: reg.user.id,
+      roles: [{ role: 'funder' as const, scopeType: 'global' as const, scopeId: null }],
+    };
+    let postDenied = false;
+    await core
+      .createOpportunity(plainActor, { title: 'Should be denied', disciplines: ['psychometrics'] })
+      .catch(() => {
+        postDenied = true;
+      });
+    check('non-poster cannot create an opportunity (FORBIDDEN)', postDenied);
+
+    const opp = await core.createOpportunity(funderActor, {
+      title: 'Psychometrics Methods Fellowship',
+      type: 'fellowship',
+      organization: 'Smoke Foundation',
+      country: 'GB',
+      disciplines: ['psychometrics', 'measurement'],
+      sourceUrl: 'https://example.org/fellowship',
+    });
+    check('funder creates opportunity + RTO id', /^RTO-\d{8}$/.test(opp.publicId), opp.publicId);
+    check('opportunity carries provenance (source)', opp.source === 'manual', `source=${opp.source}`);
+
+    const openList = await core.listOpportunities({ openOnly: true });
+    check('open opportunity appears in the public list', openList.items.some((o) => o.id === opp.id), `total=${openList.total}`);
+
+    const oppRecs = await core.recommendOpportunities(reg.researcher.id, 10);
+    check('recommends an opportunity matching a stated interest', oppRecs.some((o) => o.id === opp.id), oppRecs[0]?.title);
+    check('every opportunity match is explained (Spec §29)', oppRecs.length > 0 && oppRecs.every((o) => o.reasons.length > 0), oppRecs[0]?.reasons.join('; '));
+
+    await core.saveOpportunity(reg.researcher.id, opp.id);
+    const savedList = await core.listSavedOpportunities(reg.researcher.id);
+    check('save bookmarks the opportunity', savedList.some((o) => o.id === opp.id));
+    await core.unsaveOpportunity(reg.researcher.id, opp.id);
+    const afterUnsave = await core.listSavedOpportunities(reg.researcher.id);
+    check('unsave removes the bookmark', !afterUnsave.some((o) => o.id === opp.id));
 
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);

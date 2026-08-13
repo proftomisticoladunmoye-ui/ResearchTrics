@@ -46,6 +46,11 @@ export async function nextOutputSerial(
   return nextSerial(seq, client);
 }
 
+/** Next serial for minting RTO opportunity public IDs (Phase 13). */
+export async function nextOpportunitySerial(client: PrismaClient = prisma): Promise<number> {
+  return nextSerial('opportunity_rto_seq', client);
+}
+
 async function nextSerial(sequence: string, client: PrismaClient): Promise<number> {
   // Sequence name is an internal constant (never user input) — safe to inline.
   const rows = await client.$queryRawUnsafe<Array<{ nextval: bigint }>>(

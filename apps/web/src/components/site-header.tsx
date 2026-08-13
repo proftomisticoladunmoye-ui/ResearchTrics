@@ -8,6 +8,7 @@ const NAV = [
   { href: '/researchers', label: 'Researchers' },
   { href: '/publications', label: 'Publications' },
   { href: '/projects', label: 'Projects' },
+  { href: '/opportunities', label: 'Opportunities' },
   { href: '/institutions', label: 'Institutions' },
 ];
 

@@ -1,5 +1,5 @@
 -- ResearchTrics initial migration (generated from schema)
--- Extensions + sequences that the app relies on (Spec §7, §9, §57)
+-- Extensions + sequences that the app relies on (Spec §7, §9, §20, §57)
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE SEQUENCE IF NOT EXISTS researcher_rtx_seq START WITH 1 INCREMENT BY 1;
 CREATE SEQUENCE IF NOT EXISTS publication_rtp_seq START WITH 1 INCREMENT BY 1;
@@ -7,6 +7,7 @@ CREATE SEQUENCE IF NOT EXISTS project_rtj_seq START WITH 1 INCREMENT BY 1;
 CREATE SEQUENCE IF NOT EXISTS dataset_rtd_seq START WITH 1 INCREMENT BY 1;
 CREATE SEQUENCE IF NOT EXISTS instrument_rti_seq START WITH 1 INCREMENT BY 1;
 CREATE SEQUENCE IF NOT EXISTS software_rts_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS opportunity_rto_seq START WITH 1 INCREMENT BY 1;
 
 -- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
@@ -73,6 +74,12 @@ CREATE TYPE "DatasetAccessLevel" AS ENUM ('open', 'restricted', 'request', 'emba
 
 -- CreateEnum
 CREATE TYPE "AnalyticsEventType" AS ENUM ('page_view', 'publication_view', 'profile_view', 'project_view', 'dataset_view', 'instrument_view', 'software_view', 'journal_view', 'institution_view', 'download', 'citation_export', 'search_appearance', 'follow', 'external_referral');
+
+-- CreateEnum
+CREATE TYPE "OpportunityType" AS ENUM ('grant', 'fellowship', 'call_for_papers', 'conference', 'position', 'award', 'training', 'collaboration', 'other');
+
+-- CreateEnum
+CREATE TYPE "OpportunityStatus" AS ENUM ('draft', 'open', 'closed', 'archived');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -387,6 +394,48 @@ CREATE TABLE "grants" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "grants_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "opportunities" (
+    "id" TEXT NOT NULL,
+    "public_id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "type" "OpportunityType" NOT NULL DEFAULT 'grant',
+    "status" "OpportunityStatus" NOT NULL DEFAULT 'open',
+    "summary" TEXT,
+    "description" TEXT,
+    "organization" TEXT,
+    "country" TEXT,
+    "url" TEXT,
+    "amount_min" DECIMAL(14,2),
+    "amount_max" DECIMAL(14,2),
+    "currency" TEXT,
+    "opens_at" TIMESTAMP(3),
+    "deadline" TIMESTAMP(3),
+    "eligibility" TEXT,
+    "disciplines" TEXT[],
+    "source" TEXT,
+    "source_url" TEXT,
+    "funder_id" TEXT,
+    "institution_id" TEXT,
+    "posted_by_id" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "deleted_at" TIMESTAMP(3),
+
+    CONSTRAINT "opportunities_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "opportunity_saves" (
+    "id" TEXT NOT NULL,
+    "opportunity_id" TEXT NOT NULL,
+    "researcher_id" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "opportunity_saves_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -868,6 +917,27 @@ CREATE INDEX "files_uploader_id_idx" ON "files"("uploader_id");
 CREATE INDEX "grants_funder_id_idx" ON "grants"("funder_id");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "opportunities_public_id_key" ON "opportunities"("public_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "opportunities_slug_key" ON "opportunities"("slug");
+
+-- CreateIndex
+CREATE INDEX "opportunities_type_idx" ON "opportunities"("type");
+
+-- CreateIndex
+CREATE INDEX "opportunities_status_idx" ON "opportunities"("status");
+
+-- CreateIndex
+CREATE INDEX "opportunities_deadline_idx" ON "opportunities"("deadline");
+
+-- CreateIndex
+CREATE INDEX "opportunity_saves_researcher_id_idx" ON "opportunity_saves"("researcher_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "opportunity_saves_opportunity_id_researcher_id_key" ON "opportunity_saves"("opportunity_id", "researcher_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "projects_public_id_key" ON "projects"("public_id");
 
 -- CreateIndex
@@ -1061,6 +1131,21 @@ ALTER TABLE "publication_citation_counts" ADD CONSTRAINT "publication_citation_c
 
 -- AddForeignKey
 ALTER TABLE "grants" ADD CONSTRAINT "grants_funder_id_fkey" FOREIGN KEY ("funder_id") REFERENCES "funders"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "opportunities" ADD CONSTRAINT "opportunities_funder_id_fkey" FOREIGN KEY ("funder_id") REFERENCES "funders"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "opportunities" ADD CONSTRAINT "opportunities_institution_id_fkey" FOREIGN KEY ("institution_id") REFERENCES "institutions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "opportunities" ADD CONSTRAINT "opportunities_posted_by_id_fkey" FOREIGN KEY ("posted_by_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "opportunity_saves" ADD CONSTRAINT "opportunity_saves_opportunity_id_fkey" FOREIGN KEY ("opportunity_id") REFERENCES "opportunities"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "opportunity_saves" ADD CONSTRAINT "opportunity_saves_researcher_id_fkey" FOREIGN KEY ("researcher_id") REFERENCES "researchers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "projects" ADD CONSTRAINT "projects_pi_researcher_id_fkey" FOREIGN KEY ("pi_researcher_id") REFERENCES "researchers"("id") ON DELETE SET NULL ON UPDATE CASCADE;

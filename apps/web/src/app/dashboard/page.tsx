@@ -48,6 +48,9 @@ export default async function DashboardPage() {
           <Button asChild size="sm" variant="ghost">
             <Link href="/dashboard/insights">AI Insights</Link>
           </Button>
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/dashboard/opportunities">Opportunities</Link>
+          </Button>
           {administersInstitution ? (
             <Button asChild size="sm" variant="ghost">
               <Link href="/dashboard/institution">Institution</Link>

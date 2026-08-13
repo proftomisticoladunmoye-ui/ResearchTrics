@@ -242,6 +242,26 @@ enum AnalyticsEventType {
   external_referral
 }
 
+/// Kinds of research opportunity that can be curated (Phase 13, Spec §20).
+enum OpportunityType {
+  grant
+  fellowship
+  call_for_papers
+  conference
+  position
+  award
+  training
+  collaboration
+  other
+}
+
+enum OpportunityStatus {
+  draft
+  open
+  closed
+  archived
+}
+
 // ============================================================
 // Identity & accounts
 // ============================================================
@@ -262,6 +282,7 @@ model User {
 
   sessions           Session[]
   roles              UserRole[]
+  opportunitiesPosted Opportunity[] @relation("OpportunityPoster")
   researcher         Researcher?
   auditLogs          AuditLog[]
   verificationTokens VerificationToken[]
@@ -348,6 +369,7 @@ model Researcher {
   groupMemberships    ResearchGroupMember[]
   sentCollabRequests     CollaborationRequest[] @relation("CollabFrom")
   receivedCollabRequests CollaborationRequest[] @relation("CollabTo")
+  opportunitySaves       OpportunitySave[]
 
   @@index([familyName])
   @@index([verificationLevel])
@@ -407,6 +429,7 @@ model Institution {
   projects       Project[]
   datasets       Dataset[]
   researchGroups ResearchGroup[]
+  opportunities  Opportunity[]
 
   @@index([country])
   @@map("institutions")
@@ -677,6 +700,7 @@ model Funder {
 
   grants   Grant[]
   projects Project[]
+  opportunities Opportunity[]
 
   @@map("funders")
 }
@@ -697,6 +721,66 @@ model Grant {
 
   @@index([funderId])
   @@map("grants")
+}
+
+/// A forward-looking research opportunity researchers can discover — grants,
+/// fellowships, calls, positions (Phase 13, Spec §20). Every listing carries
+/// provenance (`source`, `sourceUrl`, `postedBy`); nothing is fabricated.
+model Opportunity {
+  id            String            @id @default(uuid())
+  publicId      String            @unique @map("public_id") // RTO-00000001
+  slug          String            @unique
+  title         String
+  type          OpportunityType   @default(grant)
+  status        OpportunityStatus @default(open)
+  summary       String?
+  description   String?
+  organization  String? // posting body, free text
+  country       String?
+  url           String? // canonical external link to apply / read more
+  amountMin     Decimal?          @db.Decimal(14, 2) @map("amount_min")
+  amountMax     Decimal?          @db.Decimal(14, 2) @map("amount_max")
+  currency      String?
+  opensAt       DateTime?         @map("opens_at")
+  deadline      DateTime?
+  eligibility   String?
+  disciplines   String[] // discipline / interest tags used for explainable matching
+
+  // Provenance & governance (Spec §57, §85)
+  source     String? // 'manual' | 'import:<source>' — where this listing came from
+  sourceUrl  String?          @map("source_url")
+  funderId   String?          @map("funder_id")
+  institutionId String?       @map("institution_id")
+  postedById String?          @map("posted_by_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  funder      Funder?           @relation(fields: [funderId], references: [id], onDelete: SetNull)
+  institution Institution?      @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  postedBy    User?             @relation("OpportunityPoster", fields: [postedById], references: [id], onDelete: SetNull)
+  savedBy     OpportunitySave[]
+
+  @@index([type])
+  @@index([status])
+  @@index([deadline])
+  @@map("opportunities")
+}
+
+/// A researcher bookmarking an opportunity to track it.
+model OpportunitySave {
+  id            String   @id @default(uuid())
+  opportunityId String   @map("opportunity_id")
+  researcherId  String   @map("researcher_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  researcher  Researcher  @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+
+  @@unique([opportunityId, researcherId])
+  @@index([researcherId])
+  @@map("opportunity_saves")
 }
 
 /// A research project — the hub that connects outputs, data, funding and people

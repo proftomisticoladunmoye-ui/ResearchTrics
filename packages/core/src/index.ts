@@ -25,3 +25,4 @@ export * from './collaboration';
 export * from './groups';
 export * from './ai-intelligence';
 export * from './institution-portal';
+export * from './opportunities';

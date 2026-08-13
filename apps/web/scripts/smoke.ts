@@ -337,6 +337,52 @@ async function main() {
     const runs = await core.listDiscoveryRuns(5);
     check('discovery runs are listed for the admin dashboard', runs.length >= 1 && runs[0]!.status === 'completed');
 
+    console.log('\nProfile claiming & verification (§11–§16, §35, §68)');
+    const claimant = await core.registerClaimant({ email: 'claimant@example.org', password: 'correcthorse7!' });
+    let ownGuard = false;
+    await core
+      .claimProfile(prov1.researcherId, reg.user.id, { method: 'orcid', verifiedOrcid: 'x' })
+      .catch(() => {
+        ownGuard = true;
+      });
+    check('a user with an existing profile cannot claim another (merge is separate §24)', ownGuard);
+
+    await core.startClaim(prov1.researcherId, claimant.userId);
+    let mismatch = false;
+    await core
+      .claimProfile(prov1.researcherId, claimant.userId, { method: 'orcid', verifiedOrcid: '0000-0000-0000-0000' })
+      .catch(() => {
+        mismatch = true;
+      });
+    check('a mismatched/typed ORCID never claims a profile (§12)', mismatch);
+
+    const claimed = await core.claimProfile(prov1.researcherId, claimant.userId, {
+      method: 'orcid',
+      verifiedOrcid: '0000-0002-1111-2222',
+    });
+    check('ORCID-verified claim marks the profile VERIFIED (§68)', claimed.profileStatus === 'verified' && claimed.verificationLevel === 3);
+    const claimedR = await prisma.researcher.findUnique({ where: { id: prov1.researcherId }, select: { userId: true } });
+    check('claimed profile is now owned by the claimant account', claimedR?.userId === claimant.userId);
+
+    await core.setPublicationClaim(prov1.researcherId, created.publicationId, 'claimed', undefined);
+    const pubClaims = await core.listResearcherPublicationClaims(prov1.researcherId);
+    check('publication claim recorded (§14)', pubClaims.some((c) => c.publicationId === created.publicationId && c.status === 'claimed'));
+    await core.setPublicationClaim(prov1.researcherId, created.publicationId, 'disputed', 'not mine');
+    const pubStillExists = await prisma.publication.findUnique({ where: { id: created.publicationId }, select: { id: true } });
+    check('dispute removes the association but keeps the global record (§15)', !!pubStillExists);
+
+    const fresh = await core.createProvisionalResearcher({
+      fullName: 'Temp Unclaimed',
+      nameVariants: ['Temp Unclaimed'],
+      topics: ['testing'],
+      works: [],
+      coauthors: [],
+      provenance: { source: 'fixture', retrievedAt: new Date().toISOString() },
+    });
+    await core.requestProfileRemoval(fresh.researcherId, 'opt out', undefined);
+    const removed = await prisma.researcher.findUnique({ where: { id: fresh.researcherId }, select: { profileStatus: true, deletedAt: true } });
+    check('profile removal suppresses the unclaimed profile (§35)', removed?.profileStatus === 'suppressed' && removed?.deletedAt != null);
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

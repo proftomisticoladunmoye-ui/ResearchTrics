@@ -5,6 +5,7 @@ import { getResearcherBySlug, getResearcherAnalytics, isAdmin } from '@researcht
 import {
   Avatar,
   Badge,
+  Button,
   Card,
   MetricCard,
   VerificationBadge,
@@ -90,6 +91,32 @@ export default async function ResearcherProfilePage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
       />
+
+      {/* Unclaimed profile — discovered from public scholarly metadata (§4, §68) */}
+      {!r.userId && ['discovered', 'unclaimed', 'claim_pending'].includes(r.profileStatus) ? (
+        <div className="mb-6 rounded-lg border border-rt-gold bg-rt-gold-light/30 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <Badge variant="gold">Unclaimed profile</Badge>
+              <p className="mt-2 text-sm text-rt-text">
+                This scholarly profile was discovered from public research metadata and has{' '}
+                <strong>not yet been claimed</strong>. Is this your research profile?
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button asChild size="sm">
+                <Link href={`/researchers/${r.slug}/claim`}>Claim this profile</Link>
+              </Button>
+              <Link
+                href={`/researchers/${r.slug}/claim?not_me=1`}
+                className="text-sm text-rt-muted hover:underline"
+              >
+                This isn&rsquo;t me
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Header */}
       <div className="flex flex-col gap-5 sm:flex-row sm:items-center">

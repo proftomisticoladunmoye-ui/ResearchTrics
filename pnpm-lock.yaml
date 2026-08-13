@@ -262,6 +262,28 @@ importers:
         specifier: ^2.1.5
         version: 2.1.9(@types/node@22.20.1)
 
+  packages/federation:
+    dependencies:
+      '@researchtrics/integration-crossref':
+        specifier: workspace:*
+        version: link:../integrations/crossref
+      '@researchtrics/integration-openalex':
+        specifier: workspace:*
+        version: link:../integrations/openalex
+      '@researchtrics/integration-shared':
+        specifier: workspace:*
+        version: link:../integrations/shared
+    devDependencies:
+      '@types/node':
+        specifier: ^22.9.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.5
+        version: 2.1.9(@types/node@22.20.1)
+
   packages/integrations/crossref:
     dependencies:
       '@researchtrics/integration-shared':

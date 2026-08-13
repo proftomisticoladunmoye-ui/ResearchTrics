@@ -2,6 +2,7 @@ import {
   prisma,
   type PrismaClient,
   type Prisma,
+  type DiscoveryRun,
   nextResearcherSerial,
 } from '@researchtrics/db';
 import type {
@@ -271,7 +272,10 @@ export async function runDiscovery(
   }
 }
 
-export async function listDiscoveryRuns(limit = 20, client: PrismaClient = prisma) {
+export async function listDiscoveryRuns(
+  limit = 20,
+  client: PrismaClient = prisma,
+): Promise<DiscoveryRun[]> {
   return client.discoveryRun.findMany({ orderBy: { startedAt: 'desc' }, take: limit });
 }
 

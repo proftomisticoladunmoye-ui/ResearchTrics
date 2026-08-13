@@ -81,6 +81,18 @@ CREATE TYPE "OpportunityType" AS ENUM ('grant', 'fellowship', 'call_for_papers',
 -- CreateEnum
 CREATE TYPE "OpportunityStatus" AS ENUM ('draft', 'open', 'closed', 'archived');
 
+-- CreateEnum
+CREATE TYPE "ProfileStatus" AS ENUM ('discovered', 'match_review', 'unclaimed', 'claim_pending', 'claimed', 'verified', 'disputed', 'merged', 'suppressed');
+
+-- CreateEnum
+CREATE TYPE "ClaimChannel" AS ENUM ('public', 'institutional', 'referral', 'ambassador', 'email_optin', 'researcher_initiated');
+
+-- CreateEnum
+CREATE TYPE "ClaimInvitationStatus" AS ENUM ('pending', 'sent', 'viewed', 'claimed', 'declined', 'expired', 'revoked');
+
+-- CreateEnum
+CREATE TYPE "PublicationClaimStatus" AS ENUM ('claimed', 'disputed', 'review');
+
 -- CreateTable
 CREATE TABLE "users" (
     "id" TEXT NOT NULL,
@@ -143,6 +155,9 @@ CREATE TABLE "researchers" (
     "career_stage" "CareerStage",
     "verification_level" INTEGER NOT NULL DEFAULT 0,
     "profile_visibility" "VisibilityLevel" NOT NULL DEFAULT 'public',
+    "profile_status" "ProfileStatus" NOT NULL DEFAULT 'claimed',
+    "identity_confidence" INTEGER,
+    "discovery_source" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
@@ -436,6 +451,82 @@ CREATE TABLE "opportunity_saves" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "opportunity_saves_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "researcher_sources" (
+    "id" TEXT NOT NULL,
+    "researcher_id" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "source_id" TEXT,
+    "source_url" TEXT,
+    "field" TEXT,
+    "confidence" INTEGER,
+    "retrieved_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "last_synced_at" TIMESTAMP(3),
+    "last_verified_at" TIMESTAMP(3),
+    "payload" JSONB,
+
+    CONSTRAINT "researcher_sources_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "claim_invitations" (
+    "id" TEXT NOT NULL,
+    "researcher_id" TEXT NOT NULL,
+    "token_hash" TEXT NOT NULL,
+    "channel" "ClaimChannel" NOT NULL DEFAULT 'public',
+    "status" "ClaimInvitationStatus" NOT NULL DEFAULT 'pending',
+    "referrer_user_id" TEXT,
+    "email" TEXT,
+    "expires_at" TIMESTAMP(3) NOT NULL,
+    "consumed_at" TIMESTAMP(3),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "claim_invitations_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "researcher_publication_claims" (
+    "id" TEXT NOT NULL,
+    "researcher_id" TEXT NOT NULL,
+    "publication_id" TEXT NOT NULL,
+    "status" "PublicationClaimStatus" NOT NULL DEFAULT 'review',
+    "reason" TEXT,
+    "decided_at" TIMESTAMP(3),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "researcher_publication_claims_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "profile_suppressions" (
+    "id" TEXT NOT NULL,
+    "orcid" TEXT,
+    "name_key" TEXT NOT NULL,
+    "reason" TEXT,
+    "created_by" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "profile_suppressions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "discovery_runs" (
+    "id" TEXT NOT NULL,
+    "provider" TEXT NOT NULL,
+    "query" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'queued',
+    "discovered" INTEGER NOT NULL DEFAULT 0,
+    "created" INTEGER NOT NULL DEFAULT 0,
+    "matched" INTEGER NOT NULL DEFAULT 0,
+    "started_by_id" TEXT,
+    "error" TEXT,
+    "started_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "finished_at" TIMESTAMP(3),
+
+    CONSTRAINT "discovery_runs_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -812,6 +903,9 @@ CREATE UNIQUE INDEX "researchers_slug_key" ON "researchers"("slug");
 CREATE INDEX "researchers_family_name_idx" ON "researchers"("family_name");
 
 -- CreateIndex
+CREATE INDEX "researchers_profile_status_idx" ON "researchers"("profile_status");
+
+-- CreateIndex
 CREATE INDEX "researchers_verification_level_idx" ON "researchers"("verification_level");
 
 -- CreateIndex
@@ -936,6 +1030,39 @@ CREATE INDEX "opportunity_saves_researcher_id_idx" ON "opportunity_saves"("resea
 
 -- CreateIndex
 CREATE UNIQUE INDEX "opportunity_saves_opportunity_id_researcher_id_key" ON "opportunity_saves"("opportunity_id", "researcher_id");
+
+-- CreateIndex
+CREATE INDEX "researcher_sources_researcher_id_idx" ON "researcher_sources"("researcher_id");
+
+-- CreateIndex
+CREATE INDEX "researcher_sources_source_source_id_idx" ON "researcher_sources"("source", "source_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "claim_invitations_token_hash_key" ON "claim_invitations"("token_hash");
+
+-- CreateIndex
+CREATE INDEX "claim_invitations_researcher_id_idx" ON "claim_invitations"("researcher_id");
+
+-- CreateIndex
+CREATE INDEX "claim_invitations_status_idx" ON "claim_invitations"("status");
+
+-- CreateIndex
+CREATE INDEX "researcher_publication_claims_publication_id_idx" ON "researcher_publication_claims"("publication_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "researcher_publication_claims_researcher_id_publication_id_key" ON "researcher_publication_claims"("researcher_id", "publication_id");
+
+-- CreateIndex
+CREATE INDEX "profile_suppressions_name_key_idx" ON "profile_suppressions"("name_key");
+
+-- CreateIndex
+CREATE INDEX "profile_suppressions_orcid_idx" ON "profile_suppressions"("orcid");
+
+-- CreateIndex
+CREATE INDEX "discovery_runs_provider_idx" ON "discovery_runs"("provider");
+
+-- CreateIndex
+CREATE INDEX "discovery_runs_status_idx" ON "discovery_runs"("status");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "projects_public_id_key" ON "projects"("public_id");
@@ -1146,6 +1273,21 @@ ALTER TABLE "opportunity_saves" ADD CONSTRAINT "opportunity_saves_opportunity_id
 
 -- AddForeignKey
 ALTER TABLE "opportunity_saves" ADD CONSTRAINT "opportunity_saves_researcher_id_fkey" FOREIGN KEY ("researcher_id") REFERENCES "researchers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "researcher_sources" ADD CONSTRAINT "researcher_sources_researcher_id_fkey" FOREIGN KEY ("researcher_id") REFERENCES "researchers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "claim_invitations" ADD CONSTRAINT "claim_invitations_researcher_id_fkey" FOREIGN KEY ("researcher_id") REFERENCES "researchers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "claim_invitations" ADD CONSTRAINT "claim_invitations_referrer_user_id_fkey" FOREIGN KEY ("referrer_user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "researcher_publication_claims" ADD CONSTRAINT "researcher_publication_claims_researcher_id_fkey" FOREIGN KEY ("researcher_id") REFERENCES "researchers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "researcher_publication_claims" ADD CONSTRAINT "researcher_publication_claims_publication_id_fkey" FOREIGN KEY ("publication_id") REFERENCES "publications"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "projects" ADD CONSTRAINT "projects_pi_researcher_id_fkey" FOREIGN KEY ("pi_researcher_id") REFERENCES "researchers"("id") ON DELETE SET NULL ON UPDATE CASCADE;

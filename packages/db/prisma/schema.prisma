@@ -262,6 +262,48 @@ enum OpportunityStatus {
   archived
 }
 
+/// Lifecycle of a researcher profile through discovery and claiming
+/// (Discovery Engine §3, §68). Discovered ≠ verified until the researcher
+/// proves ownership.
+enum ProfileStatus {
+  discovered
+  match_review
+  unclaimed
+  claim_pending
+  claimed
+  verified
+  disputed
+  merged
+  suppressed
+}
+
+/// How a claim opportunity reached the researcher (Discovery Engine §17).
+enum ClaimChannel {
+  public
+  institutional
+  referral
+  ambassador
+  email_optin
+  researcher_initiated
+}
+
+enum ClaimInvitationStatus {
+  pending
+  sent
+  viewed
+  claimed
+  declined
+  expired
+  revoked
+}
+
+/// A researcher's decision about a candidate publication (Discovery Engine §14, §15).
+enum PublicationClaimStatus {
+  claimed
+  disputed
+  review
+}
+
 // ============================================================
 // Identity & accounts
 // ============================================================
@@ -283,6 +325,7 @@ model User {
   sessions           Session[]
   roles              UserRole[]
   opportunitiesPosted Opportunity[] @relation("OpportunityPoster")
+  claimReferrals      ClaimInvitation[] @relation("ClaimReferrer")
   researcher         Researcher?
   auditLogs          AuditLog[]
   verificationTokens VerificationToken[]
@@ -348,6 +391,13 @@ model Researcher {
   verificationLevel  Int             @default(0) @map("verification_level")
   profileVisibility  VisibilityLevel @default(public) @map("profile_visibility")
 
+  // Discovery & claiming (Discovery Engine §3, §26). identityConfidence is a
+  // DISTINCT construct from RVM — it measures how sure we are of *who this is*,
+  // never research visibility.
+  profileStatus      ProfileStatus @default(claimed) @map("profile_status")
+  identityConfidence Int?          @map("identity_confidence") // 0..100
+  discoverySource    String?       @map("discovery_source")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -370,8 +420,12 @@ model Researcher {
   sentCollabRequests     CollaborationRequest[] @relation("CollabFrom")
   receivedCollabRequests CollaborationRequest[] @relation("CollabTo")
   opportunitySaves       OpportunitySave[]
+  discoverySources       ResearcherSource[]
+  claimInvitations       ClaimInvitation[]
+  publicationClaims      ResearcherPublicationClaim[]
 
   @@index([familyName])
+  @@index([profileStatus])
   @@index([verificationLevel])
   @@map("researchers")
 }
@@ -605,6 +659,7 @@ model Publication {
   authors        PublicationAuthor[]
   citationCounts PublicationCitationCount[]
   projectLinks   ProjectPublication[]
+  researcherClaims ResearcherPublicationClaim[]
 
   @@index([publishedYear])
   @@index([journalId])
@@ -781,6 +836,108 @@ model OpportunitySave {
   @@unique([opportunityId, researcherId])
   @@index([researcherId])
   @@map("opportunity_saves")
+}
+
+// ============================================================
+// Researcher Discovery & Profile Claiming (Discovery Engine)
+// ============================================================
+
+/// Per-field provenance for a discovered researcher (Discovery Engine §5, §36).
+/// Every imported attribute records where it came from and how confident we are.
+model ResearcherSource {
+  id             String    @id @default(uuid())
+  researcherId   String    @map("researcher_id")
+  source         String // 'openalex' | 'crossref' | 'orcid' | 'ojs' | ...
+  sourceId       String?   @map("source_id")
+  sourceUrl      String?   @map("source_url")
+  field          String? // which attribute this backs: 'name' | 'institution' | 'orcid' | ...
+  confidence     Int? // 0..100
+  retrievedAt    DateTime  @default(now()) @map("retrieved_at")
+  lastSyncedAt   DateTime? @map("last_synced_at")
+  lastVerifiedAt DateTime? @map("last_verified_at")
+  payload        Json?
+
+  researcher Researcher @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+
+  @@index([researcherId])
+  @@index([source, sourceId])
+  @@map("researcher_sources")
+}
+
+/// A secure, single-use claim token for a discovered profile (Discovery Engine
+/// §17, §18, §32). The raw token is NEVER stored — only its SHA-256 hash.
+model ClaimInvitation {
+  id             String                @id @default(uuid())
+  researcherId   String                @map("researcher_id")
+  tokenHash      String                @unique @map("token_hash")
+  channel        ClaimChannel          @default(public)
+  status         ClaimInvitationStatus @default(pending)
+  referrerUserId String?               @map("referrer_user_id")
+  email          String? // only if legitimately obtained + consented
+  expiresAt      DateTime              @map("expires_at")
+  consumedAt     DateTime?             @map("consumed_at")
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  researcher Researcher @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+  referrer   User?      @relation("ClaimReferrer", fields: [referrerUserId], references: [id], onDelete: SetNull)
+
+  @@index([researcherId])
+  @@index([status])
+  @@map("claim_invitations")
+}
+
+/// A researcher's per-publication claim/dispute decision (Discovery Engine §14,
+/// §15). Disputes remove the association only — never the global scholarly record.
+model ResearcherPublicationClaim {
+  id            String                 @id @default(uuid())
+  researcherId  String                 @map("researcher_id")
+  publicationId String                 @map("publication_id")
+  status        PublicationClaimStatus @default(review)
+  reason        String?
+  decidedAt     DateTime?              @map("decided_at")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+
+  researcher  Researcher  @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@unique([researcherId, publicationId])
+  @@index([publicationId])
+  @@map("researcher_publication_claims")
+}
+
+/// Opt-out / removal record for an unclaimed profile (Discovery Engine §35).
+/// Retained minimally so future syncs do not recreate a suppressed profile.
+model ProfileSuppression {
+  id        String   @id @default(uuid())
+  orcid     String?
+  nameKey   String   @map("name_key") // normalized name(+country) key
+  reason    String?
+  createdBy String?  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([nameKey])
+  @@index([orcid])
+  @@map("profile_suppressions")
+}
+
+/// A discovery batch run for admin tracking (Discovery Engine §22, §23, §40).
+model DiscoveryRun {
+  id          String    @id @default(uuid())
+  provider    String
+  query       String?
+  status      String    @default("queued") // queued | running | completed | failed
+  discovered  Int       @default(0)
+  created     Int       @default(0)
+  matched     Int       @default(0)
+  startedById String?   @map("started_by_id")
+  error       String?
+  startedAt   DateTime  @default(now()) @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+
+  @@index([provider])
+  @@index([status])
+  @@map("discovery_runs")
 }
 
 /// A research project — the hub that connects outputs, data, funding and people

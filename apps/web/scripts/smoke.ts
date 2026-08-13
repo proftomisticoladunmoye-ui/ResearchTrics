@@ -294,6 +294,39 @@ async function main() {
     check('connection path links the two researchers', path.connected && path.hops >= 1, `hops=${path.hops}`);
     check('connection path explains each hop (Spec §29)', path.steps.length > 0 && path.steps.every((s) => s.reason.length > 0), path.steps[0]?.reason);
 
+    console.log('\nResearcher Discovery (provenance, provisional, identity — not RVM)');
+    const provider = new core.FixtureDiscoveryProvider();
+    const candidates = await provider.discover({ institution: 'University X' });
+    check('discovery provider yields candidates with provenance', candidates.length >= 1 && !!candidates[0]!.provenance.source, `n=${candidates.length}`);
+    const jane = candidates[0]!;
+
+    const prov1 = await core.createProvisionalResearcher(jane);
+    check('provisional profile created + RTX id', prov1.status === 'created' && /^RTX-\d{8}$/.test(prov1.researchtricsId), prov1.researchtricsId);
+    const discovered = await core.getDiscoveredProfileBySlug(prov1.slug);
+    check('discovered profile is UNCLAIMED, not verified (§68)', discovered?.profileStatus === 'unclaimed' && discovered?.userId == null);
+    check('per-field provenance recorded (§36)', (discovered?.discoverySources.length ?? 0) >= 1, `sources=${discovered?.discoverySources.length}`);
+
+    const idReport = core.buildIdentityReport({
+      orcidExact: true,
+      institutionMatch: true,
+      affiliationMatch: true,
+      topicSimilarity: 1,
+      coauthorOverlap: 6,
+    });
+    check('identity confidence is 0..100 and distinct from RVM (§26)', idReport.confidence >= 0 && idReport.confidence <= 100 && idReport.tier === 'very_high', `conf=${idReport.confidence} tier=${idReport.tier}`);
+    check('identity match is explained (§25)', idReport.reasons.length > 0, idReport.reasons.join('; '));
+
+    const prov2 = await core.createProvisionalResearcher(jane);
+    check('re-discovery is idempotent on ORCID (no duplicate)', prov2.status === 'exists' && prov2.researcherId === prov1.researcherId);
+
+    const ravi = (await provider.discover({ topic: 'open science' }))[0]!;
+    await core.recordSuppression({ name: ravi.fullName, country: ravi.country, reason: 'opt-out' });
+    const provSuppressed = await core.createProvisionalResearcher(ravi);
+    check('suppression blocks profile recreation (§35)', provSuppressed.status === 'suppressed');
+
+    const tok = core.generateClaimToken();
+    check('claim token verifies and rejects a wrong token (§32)', core.verifyClaimToken(tok.token, tok.tokenHash) && !core.verifyClaimToken('wrong', tok.tokenHash));
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

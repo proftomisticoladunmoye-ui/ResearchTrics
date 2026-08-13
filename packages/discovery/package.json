@@ -1,5 +1,5 @@
 {
-  "name": "@researchtrics/core",
+  "name": "@researchtrics/discovery",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,14 +10,6 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
-  },
-  "dependencies": {
-    "@node-rs/argon2": "^2.0.2",
-    "@researchtrics/config": "workspace:*",
-    "@researchtrics/db": "workspace:*",
-    "pino": "^9.5.0",
-    "@researchtrics/ai": "workspace:*",
-    "@researchtrics/discovery": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

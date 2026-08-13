@@ -1,0 +1,132 @@
+# Render blueprint (Infrastructure-as-Code) for ResearchTrics.
+# Defines the whole runtime stack: the Next.js web app, the BullMQ worker, a
+# Render Key Value (Redis) instance, and a shared secrets group. Neon Postgres
+# is external (set DATABASE_URL / DIRECT_URL in the env group below).
+#
+# Deploy: push this file, then in Render → New → Blueprint → pick this repo.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# NOTE: pnpm is enabled via corepack in each build command. Node is pinned with
+# NODE_VERSION. Background Workers and pre-deploy commands require a paid
+# instance type (the web service can run on `free` for staging, with cold starts).
+
+services:
+  # ---------------- Web app (Next.js) ----------------
+  - type: web
+    name: researchtrics-web
+    runtime: node
+    region: ohio # closest Render region to Neon us-east-2
+    plan: starter # `free` works for staging (spins down on idle); starter for prod
+    branch: build/researchtrics-mvp
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @researchtrics/db exec prisma generate &&
+      pnpm --filter @researchtrics/web build
+    startCommand: pnpm --filter @researchtrics/web start
+    # Runs before each deploy goes live — applies migrations to Neon (uses
+    # DIRECT_URL). Requires a paid instance; drop it if deploying on `free` and
+    # run `prisma migrate deploy` manually instead.
+    preDeployCommand: pnpm --filter @researchtrics/db exec prisma migrate deploy
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # NEXT_PUBLIC_* is baked at build time — set this to the live URL
+      # (Render external URL or your custom domain) before the first build.
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          name: researchtrics-redis
+          type: keyvalue
+          property: connectionString
+      - fromGroup: researchtrics-secrets
+
+  # ---------------- Background worker (BullMQ) ----------------
+  - type: worker
+    name: researchtrics-worker
+    runtime: node
+    region: ohio
+    plan: starter # background workers require a paid instance
+    branch: build/researchtrics-mvp
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @researchtrics/db exec prisma generate &&
+      pnpm --filter @researchtrics/worker build
+    startCommand: pnpm --filter @researchtrics/worker start
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: REDIS_URL
+        fromService:
+          name: researchtrics-redis
+          type: keyvalue
+          property: connectionString
+      - fromGroup: researchtrics-secrets
+
+  # ---------------- Redis (Render Key Value) ----------------
+  # Answers the earlier Redis question: this provisions managed Redis, so you do
+  # not need Upstash. `noeviction` is required by BullMQ.
+  - type: keyvalue
+    name: researchtrics-redis
+    region: ohio
+    plan: starter # `free` KV exists but is ephemeral; starter persists
+    maxmemoryPolicy: noeviction
+    ipAllowList: [] # allow only Render internal network
+
+# ---------------- Shared secrets (set once in the Render dashboard) ----------------
+envVarGroups:
+  - name: researchtrics-secrets
+    envVars:
+      # Neon — paste the pooled URL here and the direct URL below.
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      # Session signing — any long random string; Render generates one.
+      - key: SESSION_SECRET
+        generateValue: true
+      # OAuth-token encryption — MUST be base64 of exactly 32 bytes.
+      # Generate: openssl rand -base64 32   (then paste it here)
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      # Object storage (S3-compatible, e.g. Cloudflare R2 / AWS S3).
+      - key: OBJECT_STORAGE_ENDPOINT
+        sync: false
+      - key: OBJECT_STORAGE_REGION
+        sync: false
+      - key: OBJECT_STORAGE_BUCKET
+        sync: false
+      - key: OBJECT_STORAGE_KEY
+        sync: false
+      - key: OBJECT_STORAGE_SECRET
+        sync: false
+      - key: OBJECT_STORAGE_FORCE_PATH_STYLE
+        value: "true"
+      # Integrations (optional at first launch).
+      - key: ORCID_CLIENT_ID
+        sync: false
+      - key: ORCID_CLIENT_SECRET
+        sync: false
+      - key: ORCID_ENVIRONMENT
+        value: production
+      - key: CROSSREF_MAILTO
+        sync: false
+      - key: OPENALEX_MAILTO
+        sync: false
+      - key: AI_PROVIDER
+        value: claude
+      - key: AI_API_KEY
+        sync: false
+      - key: EMAIL_PROVIDER
+        value: console
+      - key: EMAIL_FROM
+        sync: false

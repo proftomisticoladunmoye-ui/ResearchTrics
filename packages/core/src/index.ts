@@ -35,6 +35,9 @@ export * from './research-outputs-discovery';
 export * from './institution-normalization';
 export * from './unification';
 export * from './federation-ops';
+export * from './rate-limit';
+export * from './circuit-breaker';
+export * from './anti-fraud';
 // Re-export the federation toolkit (provider interface, adapters, health).
 export * from '@researchtrics/federation';
 // Re-export the discovery toolkit (provider interface, identity report, tokens).

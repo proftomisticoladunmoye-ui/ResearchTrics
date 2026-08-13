@@ -522,6 +522,58 @@ async function main() {
     const uWork = await core.getUnifiedWorkByPublicId(uni.publicId);
     check('unified work is readable by public id with field provenance (§29)', uWork?.publicId === uni.publicId && (uWork?.fieldProvenance.length ?? 0) > 0);
 
+    console.log('\nPhase 15 hardening: rate limit, circuit breaker, anti-fraud (§32/§33/§35)');
+    // Rate limiter: permits up to the limit, then blocks (deterministic clock).
+    let clock = 0;
+    const limiter = new core.RateLimiter({ now: () => clock });
+    const rule = { limit: 3, windowMs: 60_000 };
+    const decisions = [];
+    for (let i = 0; i < 4; i++) decisions.push(await limiter.hit('smoke', rule));
+    check(
+      'rate limiter allows up to the limit then blocks (§35)',
+      decisions.slice(0, 3).every((d) => d.allowed) && decisions[3]!.allowed === false && decisions[3]!.retryAfterSeconds > 0,
+      `allowed=${decisions.map((d) => d.allowed).join(',')}`,
+    );
+
+    // Circuit breaker: trips OPEN after failures, then half-opens after cooldown.
+    let cbClock = 0;
+    const breaker = new core.CircuitBreaker('smoke', { failureThreshold: 2, cooldownMs: 5_000, now: () => cbClock });
+    const boom = async () => { throw new Error('down'); };
+    for (let i = 0; i < 2; i++) { try { await breaker.execute(boom); } catch { /* expected */ } }
+    const openedState = breaker.currentState();
+    let failedFast = false;
+    try { await breaker.execute(async () => 'x'); } catch (e) { failedFast = e instanceof core.CircuitOpenError; }
+    cbClock = 5_001;
+    const halfOpen = breaker.currentState();
+    check(
+      'circuit breaker trips open, fails fast, then half-opens after cooldown',
+      openedState === 'open' && failedFast && halfOpen === 'half_open',
+      `open=${openedState} failFast=${failedFast} recovered=${halfOpen}`,
+    );
+
+    // Anti-fraud: disposable-email claim is high risk and routed to review (§33).
+    const disposableRisk = await core.assessClaimRisk({
+      userId: reg.user.id,
+      researcherId: reg.researcher.id,
+      email: 'ghost@mailinator.com',
+    });
+    check(
+      'disposable-email claim is high risk and requires review (§33)',
+      disposableRisk.level === 'high' && disposableRisk.requiresReview,
+      `level=${disposableRisk.level} score=${disposableRisk.score}`,
+    );
+    const cleanRisk = await core.assessClaimRisk({
+      userId: reg.user.id,
+      researcherId: reg.researcher.id,
+      email: 'prof@cam.ac.uk',
+    });
+    check('institutional-email claim is low risk (§33)', cleanRisk.level === 'low' && !cleanRisk.requiresReview, `level=${cleanRisk.level}`);
+
+    // Security events append to the audit log without breaking the flow (§35).
+    const auditBefore = await prisma.auditLog.count();
+    await core.recordSecurityEvent({ action: 'smoke.security_event', entityType: 'researcher', entityId: reg.researcher.id, detail: { ok: true } });
+    check('security event appended to audit log (§35)', (await prisma.auditLog.count()) === auditBefore + 1);
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

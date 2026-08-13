@@ -18,7 +18,9 @@ export default async function AdminSourcesPage() {
       <p className="mt-1 text-sm text-rt-muted">
         Live status of each scholarly metadata provider (§34). A provider shows{' '}
         <strong>down</strong> here when it is unreachable — including this environment, which makes
-        no live calls.
+        no live calls. The <strong>circuit</strong> column shows the breaker guarding each source:{' '}
+        <em>open</em> means repeated failures have tripped it and calls are failing fast to let the
+        source recover.
       </p>
 
       <Card className="mt-6 p-6">
@@ -28,6 +30,7 @@ export default async function AdminSourcesPage() {
               <tr className="text-left text-xs uppercase text-rt-muted">
                 <th className="py-2">Provider</th>
                 <th>Status</th>
+                <th>Circuit</th>
                 <th className="text-right">Latency</th>
                 <th>Checked</th>
                 <th>Detail</th>
@@ -39,6 +42,11 @@ export default async function AdminSourcesPage() {
                   <td className="py-2 font-medium text-rt-text capitalize">{h.provider}</td>
                   <td>
                     <Badge variant={STATUS_BADGE[h.status] ?? 'warning'}>{h.status}</Badge>
+                  </td>
+                  <td>
+                    <Badge variant={h.circuit === 'closed' ? 'neutral' : 'warning'}>
+                      {h.circuit === 'closed' ? 'closed' : h.circuit === 'open' ? 'open' : 'half-open'}
+                    </Badge>
                   </td>
                   <td className="text-right tabular-nums text-rt-muted">
                     {h.latencyMs != null ? `${h.latencyMs} ms` : '—'}

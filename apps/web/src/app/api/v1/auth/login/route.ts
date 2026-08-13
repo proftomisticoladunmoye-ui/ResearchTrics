@@ -2,6 +2,7 @@ import { type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { authenticate, createSession, validationError } from '@researchtrics/core';
 import { ok, fail } from '@/lib/api';
+import { enforceRateLimit, clientIp } from '@/lib/rate-limit';
 import { SESSION_COOKIE, sessionCookieOptions } from '@/lib/session-cookie';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +19,11 @@ export async function POST(req: NextRequest) {
     });
     const parsed = bodySchema.safeParse(json);
     if (!parsed.success) throw validationError('Email and password are required');
+
+    // Throttle credential submission per IP and per targeted account to blunt
+    // brute force / credential stuffing (Spec §35, Phase 15).
+    await enforceRateLimit('login', `ip:${clientIp(req)}`);
+    await enforceRateLimit('login', `email:${parsed.data.email.toLowerCase()}`);
 
     const user = await authenticate(parsed.data.email, parsed.data.password);
 

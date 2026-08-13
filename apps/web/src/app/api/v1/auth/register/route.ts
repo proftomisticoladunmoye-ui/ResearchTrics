@@ -8,6 +8,7 @@ import {
   logger,
 } from '@researchtrics/core';
 import { ok, fail } from '@/lib/api';
+import { enforceRateLimit, clientIp } from '@/lib/rate-limit';
 import { SESSION_COOKIE, sessionCookieOptions } from '@/lib/session-cookie';
 
 export const dynamic = 'force-dynamic';
@@ -27,6 +28,9 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       throw validationError('Invalid registration details', parsed.error.flatten());
     }
+
+    // Throttle account creation per IP (Spec §35, Phase 15).
+    await enforceRateLimit('register', `ip:${clientIp(req)}`);
 
     const { user, researcher } = await registerResearcher(parsed.data);
 

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { validationError, unauthorized, badRequest, isValidDoi } from '@researchtrics/core';
 import { NotFoundError } from '@researchtrics/integration-shared';
 import { ok, fail } from '@/lib/api';
+import { enforceRateLimit } from '@/lib/rate-limit';
 import { getCurrentUser } from '@/lib/current-user';
 import { importPublicationByDoi } from '@/lib/import-publication';
 
@@ -18,6 +19,9 @@ export async function POST(req: NextRequest) {
     const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) throw validationError('A DOI is required');
     if (!isValidDoi(parsed.data.doi)) throw badRequest('That does not look like a valid DOI');
+
+    // Throttle outbound Crossref lookups per user (Phase 15).
+    await enforceRateLimit('importDoi', `user:${user.researcher.id}`);
 
     try {
       const result = await importPublicationByDoi(parsed.data.doi);

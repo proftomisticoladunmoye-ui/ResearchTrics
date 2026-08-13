@@ -12,5 +12,12 @@ export function fail(err: unknown): NextResponse {
   if (problem.status >= 500) {
     logger.error({ err }, 'Unhandled API error');
   }
-  return NextResponse.json(problem.body, { status: problem.status });
+  const res = NextResponse.json(problem.body, { status: problem.status });
+  // Surface a Retry-After hint for throttled callers (Phase 15).
+  if (problem.status === 429) {
+    const details = problem.body.error.details as { retryAfterSeconds?: number } | undefined;
+    const retry = details?.retryAfterSeconds;
+    if (typeof retry === 'number') res.headers.set('Retry-After', String(retry));
+  }
+  return res;
 }

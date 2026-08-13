@@ -5,6 +5,7 @@ import {
   type ProviderHealth,
 } from '@researchtrics/federation';
 import { notFound } from './errors';
+import { getCircuitBreaker, CircuitOpenError, type CircuitState } from './circuit-breaker';
 
 /**
  * Federation operations & audits (addendum §34, §40, §42).
@@ -41,13 +42,68 @@ async function withTimeout(p: Promise<ProviderHealth>, ms: number, provider: str
   }
 }
 
-/** Probe every configured provider's health (§34). Timeout-guarded per provider. */
+/** A provider's health plus the circuit-breaker state guarding its outbound calls. */
+export interface ProviderHealthWithCircuit extends ProviderHealth {
+  circuit: CircuitState;
+}
+
+/**
+ * Probe every configured provider's health (§34), each timeout-guarded and
+ * routed through a per-provider circuit breaker (Phase 15). A provider that
+ * keeps reporting `down` trips its breaker OPEN, so subsequent probes fail fast
+ * (`circuit_open`) instead of hanging — the same breaker guards live ingestion
+ * calls. Breaker state is surfaced so operators can see a source cooling down.
+ */
 export async function federationHealthReport(
   providers?: ScholarlyMetadataProvider[],
   timeoutMs = 4000,
-): Promise<ProviderHealth[]> {
+): Promise<ProviderHealthWithCircuit[]> {
   const list = providers ?? allFederationProviders(federationConfigFromEnv());
-  return Promise.all(list.map((p) => withTimeout(p.healthCheck(), timeoutMs, p.name)));
+  return Promise.all(list.map((p) => guardedHealthProbe(p, timeoutMs)));
+}
+
+async function guardedHealthProbe(
+  provider: ScholarlyMetadataProvider,
+  timeoutMs: number,
+): Promise<ProviderHealthWithCircuit> {
+  const breaker = getCircuitBreaker(`federation:${provider.name}`);
+  try {
+    // Treat a `down` health as a breaker failure so repeated outages trip it.
+    const health = await breaker.execute(async () => {
+      const h = await withTimeout(provider.healthCheck(), timeoutMs, provider.name);
+      if (h.status === 'down') throw new ProbeDownError(h);
+      return h;
+    });
+    return { ...health, circuit: breaker.currentState() };
+  } catch (err) {
+    if (err instanceof ProbeDownError) {
+      return { ...err.health, circuit: breaker.currentState() };
+    }
+    if (err instanceof CircuitOpenError) {
+      return {
+        provider: provider.name,
+        status: 'down',
+        checkedAt: new Date().toISOString(),
+        error: 'circuit_open',
+        circuit: 'open',
+      };
+    }
+    return {
+      provider: provider.name,
+      status: 'down',
+      checkedAt: new Date().toISOString(),
+      error: err instanceof Error ? err.message : 'unknown error',
+      circuit: breaker.currentState(),
+    };
+  }
+}
+
+/** Internal: carries a `down` health through the breaker as a failure. */
+class ProbeDownError extends Error {
+  constructor(readonly health: ProviderHealth) {
+    super('provider down');
+    this.name = 'ProbeDownError';
+  }
 }
 
 // ---------- Data quality framework (§42) ----------

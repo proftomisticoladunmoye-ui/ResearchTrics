@@ -16,7 +16,8 @@
     "@researchtrics/integration-ojs": "workspace:*",
     "bullmq": "^5.34.0",
     "ioredis": "^5.4.1",
-    "pino": "^9.5.0"
+    "pino": "^9.5.0",
+    "@researchtrics/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

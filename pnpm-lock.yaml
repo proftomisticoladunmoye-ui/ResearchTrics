@@ -126,6 +126,9 @@ importers:
       '@researchtrics/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@researchtrics/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@researchtrics/integration-ojs':
         specifier: workspace:*
         version: link:../../packages/integrations/ojs
@@ -244,6 +247,10 @@ importers:
         version: 2.1.9(@types/node@22.20.1)
 
   packages/discovery:
+    dependencies:
+      '@researchtrics/integration-shared':
+        specifier: workspace:*
+        version: link:../integrations/shared
     devDependencies:
       '@types/node':
         specifier: ^22.9.0

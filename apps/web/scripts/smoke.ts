@@ -327,6 +327,16 @@ async function main() {
     const tok = core.generateClaimToken();
     check('claim token verifies and rejects a wrong token (§32)', core.verifyClaimToken(tok.token, tok.tokenHash) && !core.verifyClaimToken('wrong', tok.tokenHash));
 
+    // Discovery run (batch) via the offline fixture provider — records a run + counts (§22/§40).
+    const run = await core.runDiscovery({
+      provider: core.createDiscoveryProvider('fixture'),
+      query: {},
+    });
+    check('discovery run records counts (§40)', run.discovered >= 2 && run.created + run.matched >= 1, `discovered=${run.discovered} created=${run.created} matched=${run.matched}`);
+    check('re-run is idempotent (existing profiles matched, not duplicated)', (await core.runDiscovery({ provider: core.createDiscoveryProvider('fixture'), query: {} })).created === 0);
+    const runs = await core.listDiscoveryRuns(5);
+    check('discovery runs are listed for the admin dashboard', runs.length >= 1 && runs[0]!.status === 'completed');
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

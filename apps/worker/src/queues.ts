@@ -5,6 +5,7 @@
 export const QUEUES = {
   systemHealth: 'system.health',
   ojsSync: 'ojs.sync',
+  discoveryRun: 'discovery.run',
   orcidSync: 'orcid.sync',
   crossrefImport: 'crossref.import',
   openalexImport: 'openalex.import',

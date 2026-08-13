@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 const ADMIN_NAV = [
   { href: '/admin', label: 'Overview' },
   { href: '/admin/ojs', label: 'OJS Sync' },
+  { href: '/admin/discovery', label: 'Discovery' },
   { href: '/admin/scholar', label: 'Scholar Check' },
   { href: '/admin/researchers', label: 'Researchers' },
   { href: '/admin/publications', label: 'Publications' },

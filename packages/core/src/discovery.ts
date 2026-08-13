@@ -4,7 +4,11 @@ import {
   type Prisma,
   nextResearcherSerial,
 } from '@researchtrics/db';
-import type { DiscoveredResearcher } from '@researchtrics/discovery';
+import type {
+  DiscoveredResearcher,
+  ResearcherDiscoveryProvider,
+  DiscoveryQuery,
+} from '@researchtrics/discovery';
 import { formatResearchtricsId, slugWithSuffix } from './id';
 import { logger } from './logger';
 
@@ -178,6 +182,100 @@ function buildProvenanceRows(candidate: DiscoveredResearcher) {
   if (candidate.topics.length > 0) rows.push({ ...base, field: 'topics' });
   return rows as Prisma.ResearcherSourceCreateWithoutResearcherInput[];
 }
+
+// ---------- Discovery runs (batch, tracked — §22, §23, §40) ----------
+
+export interface RunDiscoveryInput {
+  provider: ResearcherDiscoveryProvider;
+  query: DiscoveryQuery;
+  actorId?: string | null;
+}
+
+export interface DiscoveryRunSummary {
+  runId: string;
+  provider: string;
+  discovered: number;
+  created: number;
+  matched: number; // existing profiles reused, not duplicated
+  suppressed: number;
+  candidates: Array<{ researchtricsId: string; slug: string; status: string; fullName: string }>;
+}
+
+/**
+ * Run a discovery batch and materialize provisional profiles, recording a
+ * `DiscoveryRun` with counts for the admin dashboard. Bounded by the provider's
+ * query limit; large campaigns run in the worker, never in a web request (§52).
+ */
+export async function runDiscovery(
+  input: RunDiscoveryInput,
+  client: PrismaClient = prisma,
+): Promise<DiscoveryRunSummary> {
+  const run = await client.discoveryRun.create({
+    data: {
+      provider: input.provider.name,
+      query: JSON.stringify(input.query),
+      status: 'running',
+      startedById: input.actorId ?? null,
+    },
+    select: { id: true },
+  });
+
+  try {
+    const candidates = await input.provider.discover(input.query);
+    let created = 0;
+    let matched = 0;
+    let suppressed = 0;
+    const results: DiscoveryRunSummary['candidates'] = [];
+
+    for (const candidate of candidates) {
+      const r = await createProvisionalResearcher(candidate, client);
+      if (r.status === 'created') created += 1;
+      else if (r.status === 'exists') matched += 1;
+      else suppressed += 1;
+      if (r.status !== 'suppressed') {
+        results.push({
+          researchtricsId: r.researchtricsId,
+          slug: r.slug,
+          status: r.status,
+          fullName: candidate.fullName,
+        });
+      }
+    }
+
+    await client.discoveryRun.update({
+      where: { id: run.id },
+      data: {
+        status: 'completed',
+        discovered: candidates.length,
+        created,
+        matched,
+        finishedAt: new Date(),
+      },
+    });
+
+    return {
+      runId: run.id,
+      provider: input.provider.name,
+      discovered: candidates.length,
+      created,
+      matched,
+      suppressed,
+      candidates: results,
+    };
+  } catch (err) {
+    await client.discoveryRun.update({
+      where: { id: run.id },
+      data: { status: 'failed', error: (err as Error).message, finishedAt: new Date() },
+    });
+    throw err;
+  }
+}
+
+export async function listDiscoveryRuns(limit = 20, client: PrismaClient = prisma) {
+  return client.discoveryRun.findMany({ orderBy: { startedAt: 'desc' }, take: limit });
+}
+
+// ---------- Public read ----------
 
 /** Public read for an unclaimed/claimed discovered profile with its provenance. */
 export async function getDiscoveredProfileBySlug(slug: string, client: PrismaClient = prisma) {

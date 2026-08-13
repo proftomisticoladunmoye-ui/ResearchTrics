@@ -2,6 +2,12 @@ import { Worker, Queue, type Job } from 'bullmq';
 import IORedis from 'ioredis';
 import pino from 'pino';
 import { syncOjsSource } from '@researchtrics/integration-ojs';
+import {
+  runDiscovery,
+  createDiscoveryProvider,
+  type DiscoveryProviderName,
+  type DiscoveryQuery,
+} from '@researchtrics/core';
 import { QUEUES, defaultJobOptions } from './queues';
 
 const logger = pino({
@@ -47,6 +53,29 @@ const ojsWorker = new Worker(
 );
 ojsWorker.on('failed', (job, err) => logger.error({ jobId: job?.id, err }, 'OJS sync failed'));
 
+/**
+ * Researcher discovery processor (Discovery Engine §23, §52). Large discovery
+ * campaigns run here — never inside a web request. Live providers join the
+ * polite pool via env-configured mailto; the offline fixture provider needs no
+ * config.
+ */
+const discoveryWorker = new Worker(
+  QUEUES.discoveryRun,
+  async (job: Job<{ provider: DiscoveryProviderName; query: DiscoveryQuery; actorId?: string | null }>) => {
+    const { provider, query, actorId } = job.data;
+    logger.info({ jobId: job.id, provider, query }, 'Starting discovery run');
+    const instance = createDiscoveryProvider(provider, {
+      openalex: { baseUrl: process.env.OPENALEX_BASE_URL, mailto: process.env.OPENALEX_MAILTO, apiKey: process.env.OPENALEX_API_KEY },
+      crossref: { baseUrl: process.env.CROSSREF_BASE_URL, mailto: process.env.CROSSREF_MAILTO },
+    });
+    const summary = await runDiscovery({ provider: instance, query, actorId: actorId ?? null });
+    logger.info({ jobId: job.id, ...summary, candidates: summary.candidates.length }, 'Discovery run finished');
+    return summary;
+  },
+  { connection, concurrency: 1 },
+);
+discoveryWorker.on('failed', (job, err) => logger.error({ jobId: job?.id, err }, 'Discovery run failed'));
+
 async function bootstrap(): Promise<void> {
   logger.info({ redisUrl: redisUrl.replace(/:[^:@/]*@/, ':****@') }, 'Starting ResearchTrics worker');
   // Enqueue a self-check so the pipeline is exercised on boot.
@@ -59,6 +88,7 @@ async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'Shutting down worker');
   await healthWorker.close();
   await ojsWorker.close();
+  await discoveryWorker.close();
   await healthQueue.close();
   await connection.quit();
   process.exit(0);

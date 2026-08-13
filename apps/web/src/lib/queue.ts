@@ -25,3 +25,4 @@ export function getQueue(name: string): Queue {
 }
 
 export const OJS_SYNC_QUEUE = 'ojs.sync';
+export const DISCOVERY_RUN_QUEUE = 'discovery.run';

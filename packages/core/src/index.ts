@@ -15,6 +15,7 @@ export * from './doi';
 export * from './citation-export';
 export * from './publication';
 export * from './storage';
+export * from './storage-s3';
 export * from './scholar-compliance';
 export * from './project';
 export * from './research-outputs';

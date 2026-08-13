@@ -111,6 +111,9 @@ envVarGroups:
         sync: false
       - key: OBJECT_STORAGE_FORCE_PATH_STYLE
         value: "true"
+      # Optional: R2 custom domain / r2.dev URL for public objects.
+      - key: OBJECT_STORAGE_PUBLIC_URL
+        sync: false
       # Integrations (optional at first launch).
       - key: ORCID_CLIENT_ID
         sync: false

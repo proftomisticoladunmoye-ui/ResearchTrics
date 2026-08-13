@@ -70,12 +70,40 @@ export class LocalFsStorageProvider implements StorageProvider {
   }
 }
 
-let provider: StorageProvider = new LocalFsStorageProvider();
+let provider: StorageProvider | null = null;
+
+/**
+ * Env-based provider selector. Defaults to local-fs; the S3/R2 module registers
+ * its own factory ({@link storageFromEnv}) when it loads, so storage.ts never
+ * has to import the object-storage SDK directly (no import cycle, no SDK in an
+ * edge/client bundle).
+ */
+let envFactory: () => StorageProvider = () => new LocalFsStorageProvider();
+
+export function registerStorageEnvFactory(factory: () => StorageProvider): void {
+  envFactory = factory;
+}
+
+function selectProviderFromEnv(): StorageProvider {
+  return envFactory();
+}
 
 export function setStorageProvider(next: StorageProvider): void {
   provider = next;
 }
+
+/**
+ * The active storage provider. Selected lazily on first use from the
+ * environment (S3/R2 when configured, else local-fs) — this runs only in
+ * server code paths that persist files, so no edge/client bundle ever pulls in
+ * the object-storage SDK. `setStorageProvider` overrides it (e.g. tests).
+ */
 export function getStorageProvider(): StorageProvider {
+  if (!provider) {
+    // Lazy require avoids a static storage → storage-s3 → storage cycle at
+    // module-eval time; by call time both modules are fully initialized.
+    provider = selectProviderFromEnv();
+  }
   return provider;
 }
 

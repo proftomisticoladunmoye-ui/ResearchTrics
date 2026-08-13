@@ -16,7 +16,15 @@ const nextConfig = {
     '@researchtrics/search',
   ],
   // Native / server-only modules must not be bundled.
-  serverExternalPackages: ['@node-rs/argon2', '@prisma/client', 'pino', 'bullmq', 'ioredis'],
+  serverExternalPackages: [
+    '@node-rs/argon2',
+    '@prisma/client',
+    'pino',
+    'bullmq',
+    'ioredis',
+    '@aws-sdk/client-s3',
+    '@aws-sdk/s3-request-presigner',
+  ],
   webpack: (config, { isServer }) => {
     if (isServer) {
       // Keep the native argon2 addon (a .node binary) out of the webpack graph;

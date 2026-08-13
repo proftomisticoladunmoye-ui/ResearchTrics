@@ -198,6 +198,8 @@ CREATE TABLE "institutions" (
     "city" TEXT,
     "type" TEXT,
     "is_tenant" BOOLEAN NOT NULL DEFAULT false,
+    "aliases" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "website" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),

@@ -37,6 +37,32 @@ export interface PersistentId {
   orcid?: string | undefined;
 }
 
+/** A normalized institution, from ROR (addendum §8). */
+export interface NormalizedInstitution {
+  source: string;
+  /** Bare ROR id (e.g. `05a28r0s0`), when available. */
+  rorId?: string | undefined;
+  name: string;
+  aliases: string[];
+  acronyms: string[];
+  country?: string | undefined;
+  countryCode?: string | undefined;
+  website?: string | undefined;
+  types: string[];
+  provenance: {
+    source: string;
+    sourceId?: string | undefined;
+    sourceUrl?: string | undefined;
+    retrievedAt: string;
+  };
+}
+
+export interface InstitutionSearchQuery {
+  name: string;
+  country?: string | undefined;
+  limit?: number | undefined;
+}
+
 /** A researcher-scoped search for works/outputs (addendum §24–§26). */
 export interface WorkSearchQuery {
   orcid?: string | undefined;
@@ -114,4 +140,8 @@ export interface ScholarlyMetadataProvider {
   getWork?(id: PersistentId): Promise<NormalizedWork>;
   /** Search a source for a researcher's works/outputs (§24–§26). */
   searchWorks?(query: WorkSearchQuery): Promise<NormalizedWork[]>;
+  /** Fetch a single institution by persistent identifier (ROR, §8). */
+  getInstitution?(id: PersistentId): Promise<NormalizedInstitution>;
+  /** Search institutions by name (ROR, §8). */
+  searchInstitutions?(query: InstitutionSearchQuery): Promise<NormalizedInstitution[]>;
 }

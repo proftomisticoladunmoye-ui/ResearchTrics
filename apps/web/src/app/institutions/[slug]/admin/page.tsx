@@ -9,6 +9,7 @@ import {
 import { Card, MetricCard, Badge } from '@researchtrics/ui';
 import { requireInstitutionAdmin } from '@/lib/institution-admin';
 import { AffiliationVerify } from '@/components/affiliation-verify';
+import { RorNormalizer } from '@/components/ror-normalizer';
 
 export const metadata: Metadata = {
   title: 'Institution Admin',
@@ -50,6 +51,18 @@ export default async function InstitutionAdminPage({
         Every figure below is a live aggregate over your affiliated researchers&rsquo; verified
         records.
       </p>
+
+      {/* Institution identity (ROR normalization, §8) */}
+      <Card className="mt-6 p-6">
+        <h2 className="text-base font-semibold text-rt-text">Institution identity (ROR)</h2>
+        <p className="mt-1 text-xs text-rt-muted">
+          Link this institution to its canonical Research Organization Registry record so name
+          variants resolve to one identity.
+        </p>
+        <div className="mt-3">
+          <RorNormalizer institutionId={inst.id} currentRorId={inst.rorId} />
+        </div>
+      </Card>
 
       {/* Grounded aggregates */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

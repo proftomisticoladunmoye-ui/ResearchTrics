@@ -457,6 +457,24 @@ async function main() {
     check('biomedical footprint counts PubMed records (§27)', footprint.count === 1 && footprint.indicator === 'present', `count=${footprint.count}`);
     check('PubMed records carry PMID + provenance (§6/§38)', footprint.works.every((w) => !!w.externalIds.pmid && w.provenance.source === 'pubmed'));
 
+    console.log('\nFederation: ROR institution normalization (§8)');
+    const rorRecord = { source: 'ror', rorId: '05a28r0s0', name: 'Smoke University', aliases: ['Smoke Univ.'], acronyms: ['SU'], country: 'United Kingdom', countryCode: 'GB', website: 'https://smoke.example', types: ['Education'], provenance: { source: 'ror', sourceId: '05a28r0s0', sourceUrl: 'https://ror.org/05a28r0s0', retrievedAt: now2 } };
+    const rorStub = {
+      name: 'ror',
+      external: true,
+      capabilities: ['getInstitution', 'search', 'healthCheck'] as const,
+      healthCheck: async () => ({ provider: 'ror', status: 'healthy' as const, checkedAt: now2 }),
+      searchInstitutions: async () => [rorRecord],
+      getInstitution: async () => rorRecord,
+    };
+    const rorCandidates = await core.resolveInstitution('SU', { provider: rorStub });
+    check('ROR resolves an institution name to a candidate with a ROR id (§8)', rorCandidates.length === 1 && rorCandidates[0]!.rorId === '05a28r0s0');
+    await core.linkInstitutionToRor(institution.id, { record: rorRecord, actorId: reg.user.id });
+    const linked = await prisma.institution.findUnique({ where: { id: institution.id }, select: { rorId: true, aliases: true, website: true } });
+    check('linking sets ROR id + aliases + website on the institution (§8)', linked?.rorId === '05a28r0s0' && (linked?.aliases ?? []).includes('SU') && linked?.website === 'https://smoke.example', `ror=${linked?.rorId}`);
+    const byRor = await core.findInstitutionByRor('05a28r0s0');
+    check('institution is now findable by its ROR id (dedup)', byRor?.id === institution.id);
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

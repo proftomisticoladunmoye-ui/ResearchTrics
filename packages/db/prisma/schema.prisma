@@ -474,6 +474,11 @@ model Institution {
   type      String?
   isTenant  Boolean @default(false) @map("is_tenant")
 
+  // ROR institution normalization (Federation §8): alternate names/acronyms
+  // that resolve to this canonical institution, plus its homepage.
+  aliases   String[] @default([])
+  website   String?
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")

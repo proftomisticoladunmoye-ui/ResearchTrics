@@ -51,6 +51,11 @@ export async function nextOpportunitySerial(client: PrismaClient = prisma): Prom
   return nextSerial('opportunity_rto_seq', client);
 }
 
+/** Next serial for minting RTW unified work record public IDs (Federation §16). */
+export async function nextWorkSerial(client: PrismaClient = prisma): Promise<number> {
+  return nextSerial('work_rtw_seq', client);
+}
+
 async function nextSerial(sequence: string, client: PrismaClient): Promise<number> {
   // Sequence name is an internal constant (never user input) — safe to inline.
   const rows = await client.$queryRawUnsafe<Array<{ nextval: bigint }>>(

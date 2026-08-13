@@ -97,6 +97,8 @@ enum ExternalSource {
   openalex
   ojs
   datacite
+  pubmed
+  ror
   user
 }
 
@@ -665,6 +667,7 @@ model Publication {
   citationCounts PublicationCitationCount[]
   projectLinks   ProjectPublication[]
   researcherClaims ResearcherPublicationClaim[]
+  unifiedRecord    UnifiedWorkRecord?
 
   @@index([publishedYear])
   @@index([journalId])
@@ -1269,6 +1272,80 @@ model ExternalRecord {
   @@index([entityType, entityId])
   @@index([source, sourceId])
   @@map("external_records")
+}
+
+/// A normalized master research record built from multiple providers
+/// (Federation §16, §18). Providers never overwrite this directly — a
+/// conflict-aware resolver chooses each field's value; all source values are
+/// retained in WorkFieldProvenance.
+model UnifiedWorkRecord {
+  id            String  @id @default(uuid())
+  publicId      String  @unique @map("public_id") // RTW-00000001
+  resourceType  String  @default("publication") @map("resource_type")
+  title         String
+  subtitle      String?
+  abstract      String?
+  publishedYear Int?    @map("published_year")
+  journalTitle  String? @map("journal_title")
+  publisher     String?
+  licenseCode   String? @map("license_code")
+
+  // External identifiers — kept per scheme (§16)
+  doi        String? @unique
+  pmid       String?
+  pmcid      String?
+  openalexId String? @map("openalex_id")
+  dataciteId String? @map("datacite_id")
+  crossrefId String? @map("crossref_id")
+  ojsId      String? @map("ojs_id")
+
+  /** Optional link to the internal Publication this record corresponds to. */
+  publicationId String? @unique @map("publication_id")
+  /** 0..1 — confidence in the resolved record (source count + agreement). */
+  confidence Float @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  publication     Publication?          @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+  fieldProvenance WorkFieldProvenance[]
+
+  @@index([doi])
+  @@map("unified_work_records")
+}
+
+/// Per-field, per-source value retention for a unified record (Federation §19,
+/// §38). Every source's value is stored; the chosen value is flagged
+/// `authoritative`, and disagreement is recorded as `conflictStatus`.
+model WorkFieldProvenance {
+  id             String   @id @default(uuid())
+  unifiedWorkId  String   @map("unified_work_id")
+  field          String
+  source         String
+  value          String?
+  authoritative  Boolean  @default(false)
+  conflictStatus String   @default("none") @map("conflict_status") // none | single | conflict
+  retrievedAt    DateTime @default(now()) @map("retrieved_at")
+
+  unifiedWork UnifiedWorkRecord @relation(fields: [unifiedWorkId], references: [id], onDelete: Cascade)
+
+  @@index([unifiedWorkId])
+  @@map("work_field_provenance")
+}
+
+/// A citation relationship from one work to another, attributed to a source
+/// (Federation §30). Counts from different sources stay distinguishable — these
+/// edges are stored separately from PublicationCitationCount and never merged.
+model CitationEdge {
+  id          String   @id @default(uuid())
+  citingDoi   String   @map("citing_doi")
+  citedDoi    String   @map("cited_doi")
+  source      String
+  retrievedAt DateTime @default(now()) @map("retrieved_at")
+
+  @@unique([citingDoi, citedDoi, source])
+  @@index([citedDoi])
+  @@map("citation_edges")
 }
 
 /// RVM score snapshot (Spec §23–25). Fully transparent + versioned: stores raw

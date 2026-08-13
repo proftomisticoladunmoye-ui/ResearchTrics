@@ -16,6 +16,9 @@ export const OUTPUT_ID_PREFIXES = {
 /** Public ID prefix for curated opportunities — RTO-00000001 (Phase 13, Spec §20). */
 export const OPPORTUNITY_ID_PREFIX = 'RTO';
 
+/** Public ID prefix for unified work records — RTW-00000001 (Federation §16). */
+export const WORK_ID_PREFIX = 'RTW';
+
 /** Verification levels (Spec §38) — clearly labelled, never misleading. */
 export const VERIFICATION_LEVELS = {
   0: { key: 'unverified', label: 'Unverified' },

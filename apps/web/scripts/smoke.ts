@@ -475,6 +475,36 @@ async function main() {
     const byRor = await core.findInstitutionByRor('05a28r0s0');
     check('institution is now findable by its ROR id (dedup)', byRor?.id === institution.id);
 
+    console.log('\nFederation: unified work record + conflict resolution + citations (§16–§19, §30)');
+    const wnow = new Date().toISOString();
+    const mkWork = (source: string, over: Record<string, unknown>) => ({
+      source,
+      resourceType: 'publication',
+      title: 'Measurement invariance',
+      externalIds: {},
+      authors: [],
+      provenance: { source, retrievedAt: wnow },
+      ...over,
+    });
+    const uCandidates = [
+      mkWork('crossref', { publishedYear: 2020, publisher: 'Elsevier', externalIds: { doi: '10.9/uni.1', crossref: '10.9/uni.1' }, authors: [{ rawName: 'Ada Lovelace' }] }),
+      mkWork('openalex', { publishedYear: 2021, externalIds: { doi: '10.9/uni.1', openalex: 'W900' }, authors: [{ rawName: 'Ada Lovelace' }] }),
+    ] as never;
+    const uni = await core.upsertUnifiedWork(uCandidates);
+    check('unified work record created with RTW id (§16)', uni.status === 'created' && /^RTW-\d{8}$/.test(uni.publicId), uni.publicId);
+    check('field conflict detected + retained, never overwritten (§19)', uni.conflicts.includes('publishedYear'));
+    const uniRec = await core.getUnifiedWorkByDoi('10.9/uni.1');
+    check('all source values kept in field provenance (§19/§38)', (uniRec?.fieldProvenance.filter((p) => p.field === 'publishedYear').length ?? 0) === 2 && uniRec?.openalexId === 'W900');
+    const uni2 = await core.upsertUnifiedWork(uCandidates);
+    check('unification is idempotent on DOI (updated, no duplicate)', uni2.status === 'updated' && uni2.id === uni.id);
+
+    await core.recordCitationEdges('10.9/citing.1', [
+      { citedDoi: '10.9/uni.1', source: 'crossref' },
+      { citedDoi: '10.9/uni.1', source: 'openalex' },
+    ]);
+    const counts = await core.citationCountsBySource('10.9/uni.1');
+    check('citation counts stay source-distinguishable, never merged (§30)', counts.crossref === 1 && counts.openalex === 1, JSON.stringify(counts));
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

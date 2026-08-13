@@ -1,5 +1,5 @@
 -- ResearchTrics initial migration (generated from schema)
--- Extensions + sequences that the app relies on (Spec §7, §9, §20, §57)
+-- Extensions + sequences that the app relies on (Spec §7, §9, §20, §57; Federation §16)
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE SEQUENCE IF NOT EXISTS researcher_rtx_seq START WITH 1 INCREMENT BY 1;
 CREATE SEQUENCE IF NOT EXISTS publication_rtp_seq START WITH 1 INCREMENT BY 1;
@@ -8,6 +8,7 @@ CREATE SEQUENCE IF NOT EXISTS dataset_rtd_seq START WITH 1 INCREMENT BY 1;
 CREATE SEQUENCE IF NOT EXISTS instrument_rti_seq START WITH 1 INCREMENT BY 1;
 CREATE SEQUENCE IF NOT EXISTS software_rts_seq START WITH 1 INCREMENT BY 1;
 CREATE SEQUENCE IF NOT EXISTS opportunity_rto_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS work_rtw_seq START WITH 1 INCREMENT BY 1;
 
 -- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
@@ -34,7 +35,7 @@ CREATE TYPE "VisibilityLevel" AS ENUM ('public', 'researchers', 'institution', '
 CREATE TYPE "IdentifierScheme" AS ENUM ('orcid', 'scopus', 'wos', 'openalex', 'scholar_url', 'ror');
 
 -- CreateEnum
-CREATE TYPE "ExternalSource" AS ENUM ('crossref', 'orcid', 'openalex', 'ojs', 'datacite', 'user');
+CREATE TYPE "ExternalSource" AS ENUM ('crossref', 'orcid', 'openalex', 'ojs', 'datacite', 'pubmed', 'ror', 'user');
 
 -- CreateEnum
 CREATE TYPE "AffiliationRole" AS ENUM ('faculty', 'postdoc', 'phd_student', 'masters_student', 'research_staff', 'visiting', 'emeritus', 'other');
@@ -775,6 +776,58 @@ CREATE TABLE "external_records" (
 );
 
 -- CreateTable
+CREATE TABLE "unified_work_records" (
+    "id" TEXT NOT NULL,
+    "public_id" TEXT NOT NULL,
+    "resource_type" TEXT NOT NULL DEFAULT 'publication',
+    "title" TEXT NOT NULL,
+    "subtitle" TEXT,
+    "abstract" TEXT,
+    "published_year" INTEGER,
+    "journal_title" TEXT,
+    "publisher" TEXT,
+    "license_code" TEXT,
+    "doi" TEXT,
+    "pmid" TEXT,
+    "pmcid" TEXT,
+    "openalex_id" TEXT,
+    "datacite_id" TEXT,
+    "crossref_id" TEXT,
+    "ojs_id" TEXT,
+    "publication_id" TEXT,
+    "confidence" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "unified_work_records_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "work_field_provenance" (
+    "id" TEXT NOT NULL,
+    "unified_work_id" TEXT NOT NULL,
+    "field" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "value" TEXT,
+    "authoritative" BOOLEAN NOT NULL DEFAULT false,
+    "conflict_status" TEXT NOT NULL DEFAULT 'none',
+    "retrieved_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "work_field_provenance_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "citation_edges" (
+    "id" TEXT NOT NULL,
+    "citing_doi" TEXT NOT NULL,
+    "cited_doi" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "retrieved_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "citation_edges_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "rvm_scores" (
     "id" TEXT NOT NULL,
     "subject_type" TEXT NOT NULL,
@@ -1151,6 +1204,27 @@ CREATE INDEX "external_records_source_source_id_idx" ON "external_records"("sour
 CREATE UNIQUE INDEX "external_records_source_source_id_entity_type_entity_id_key" ON "external_records"("source", "source_id", "entity_type", "entity_id");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "unified_work_records_public_id_key" ON "unified_work_records"("public_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "unified_work_records_doi_key" ON "unified_work_records"("doi");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "unified_work_records_publication_id_key" ON "unified_work_records"("publication_id");
+
+-- CreateIndex
+CREATE INDEX "unified_work_records_doi_idx" ON "unified_work_records"("doi");
+
+-- CreateIndex
+CREATE INDEX "work_field_provenance_unified_work_id_idx" ON "work_field_provenance"("unified_work_id");
+
+-- CreateIndex
+CREATE INDEX "citation_edges_cited_doi_idx" ON "citation_edges"("cited_doi");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "citation_edges_citing_doi_cited_doi_source_key" ON "citation_edges"("citing_doi", "cited_doi", "source");
+
+-- CreateIndex
 CREATE INDEX "rvm_scores_subject_type_subject_id_calculated_at_idx" ON "rvm_scores"("subject_type", "subject_id", "calculated_at");
 
 -- CreateIndex
@@ -1353,6 +1427,12 @@ ALTER TABLE "sync_jobs" ADD CONSTRAINT "sync_jobs_ojs_source_id_fkey" FOREIGN KE
 
 -- AddForeignKey
 ALTER TABLE "sync_logs" ADD CONSTRAINT "sync_logs_sync_job_id_fkey" FOREIGN KEY ("sync_job_id") REFERENCES "sync_jobs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "unified_work_records" ADD CONSTRAINT "unified_work_records_publication_id_fkey" FOREIGN KEY ("publication_id") REFERENCES "publications"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "work_field_provenance" ADD CONSTRAINT "work_field_provenance_unified_work_id_fkey" FOREIGN KEY ("unified_work_id") REFERENCES "unified_work_records"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "research_groups" ADD CONSTRAINT "research_groups_institution_id_fkey" FOREIGN KEY ("institution_id") REFERENCES "institutions"("id") ON DELETE SET NULL ON UPDATE CASCADE;

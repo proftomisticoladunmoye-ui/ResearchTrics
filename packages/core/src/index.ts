@@ -33,6 +33,7 @@ export * from './invitations';
 export * from './review';
 export * from './research-outputs-discovery';
 export * from './institution-normalization';
+export * from './unification';
 // Re-export the federation toolkit (provider interface, adapters, health).
 export * from '@researchtrics/federation';
 // Re-export the discovery toolkit (provider interface, identity report, tokens).

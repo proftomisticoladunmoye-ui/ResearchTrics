@@ -3,6 +3,7 @@ import {
   RESEARCHTRICS_ID_PAD,
   OUTPUT_ID_PREFIXES,
   OPPORTUNITY_ID_PREFIX,
+  WORK_ID_PREFIX,
 } from '@researchtrics/config';
 
 /**
@@ -30,6 +31,14 @@ export function formatOpportunityId(serial: number): string {
     throw new Error(`Invalid opportunity serial: ${serial}`);
   }
   return `${OPPORTUNITY_ID_PREFIX}-${String(serial).padStart(RESEARCHTRICS_ID_PAD, '0')}`;
+}
+
+/** Format a unified work record public ID (Federation §16). Example: 3 -> "RTW-00000003". */
+export function formatWorkId(serial: number): string {
+  if (!Number.isInteger(serial) || serial < 1) {
+    throw new Error(`Invalid work serial: ${serial}`);
+  }
+  return `${WORK_ID_PREFIX}-${String(serial).padStart(RESEARCHTRICS_ID_PAD, '0')}`;
 }
 
 /**

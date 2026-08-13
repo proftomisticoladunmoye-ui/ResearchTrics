@@ -37,6 +37,15 @@ export interface PersistentId {
   orcid?: string | undefined;
 }
 
+/** A researcher-scoped search for works/outputs (addendum §24–§26). */
+export interface WorkSearchQuery {
+  orcid?: string | undefined;
+  name?: string | undefined;
+  /** Restrict to these resource types (e.g. dataset, software). */
+  resourceTypes?: ResourceType[] | undefined;
+  limit?: number | undefined;
+}
+
 export type ResourceType =
   | 'publication'
   | 'dataset'
@@ -99,4 +108,6 @@ export interface ScholarlyMetadataProvider {
   healthCheck(): Promise<ProviderHealth>;
   /** Fetch a single work by persistent identifier. */
   getWork?(id: PersistentId): Promise<NormalizedWork>;
+  /** Search a source for a researcher's works/outputs (§24–§26). */
+  searchWorks?(query: WorkSearchQuery): Promise<NormalizedWork[]>;
 }

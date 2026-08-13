@@ -210,6 +210,9 @@ importers:
       '@researchtrics/discovery':
         specifier: workspace:*
         version: link:../discovery
+      '@researchtrics/federation':
+        specifier: workspace:*
+        version: link:../federation
       pino:
         specifier: ^9.5.0
         version: 9.14.0

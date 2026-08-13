@@ -427,6 +427,23 @@ async function main() {
     const apiQuery = await core.queryDiscoveredResearchers({ take: 10 });
     check('discovery query is paginated + returns provenance-bearing profiles (§51)', apiQuery.total >= 0 && Array.isArray(apiQuery.items));
 
+    console.log('\nFederation: DataCite research-output discovery (§24–§26)');
+    const now2 = new Date().toISOString();
+    const stubProvider = {
+      name: 'datacite',
+      external: true,
+      capabilities: ['search', 'healthCheck'] as const,
+      healthCheck: async () => ({ provider: 'datacite', status: 'healthy' as const, checkedAt: now2 }),
+      searchWorks: async () => [
+        { source: 'datacite', resourceType: 'dataset' as const, title: 'Cross-cultural sample 2020', externalIds: { doi: '10.5555/data.1', datacite: '10.5555/data.1' }, authors: [{ rawName: 'Ada Lovelace' }], provenance: { source: 'datacite', sourceId: '10.5555/data.1', sourceUrl: 'https://doi.org/10.5555/data.1', retrievedAt: now2 } },
+        { source: 'datacite', resourceType: 'software' as const, title: 'invariance-r', externalIds: { doi: '10.5555/soft.1', datacite: '10.5555/soft.1' }, authors: [{ rawName: 'Ada Lovelace' }], provenance: { source: 'datacite', sourceId: '10.5555/soft.1', retrievedAt: now2 } },
+      ],
+    };
+    const outputs = await core.discoverResearchOutputs(prov1.researcherId, { provider: stubProvider });
+    check('discovers dataset/software research outputs (§25/§26)', outputs.outputs.length === 2 && outputs.outputs.some((o) => o.resourceType === 'dataset') && outputs.outputs.some((o) => o.resourceType === 'software'), `n=${outputs.outputs.length}`);
+    check('discovered outputs carry DataCite provenance (§38)', outputs.outputs.every((o) => o.provenance.source === 'datacite'));
+    check('research-output discovery uses the researcher’s ORCID', outputs.orcid === '0000-0002-1111-2222', `orcid=${outputs.orcid}`);
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

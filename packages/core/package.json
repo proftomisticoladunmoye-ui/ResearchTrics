@@ -17,7 +17,8 @@
     "@researchtrics/db": "workspace:*",
     "pino": "^9.5.0",
     "@researchtrics/ai": "workspace:*",
-    "@researchtrics/discovery": "workspace:*"
+    "@researchtrics/discovery": "workspace:*",
+    "@researchtrics/federation": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

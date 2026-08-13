@@ -14,7 +14,7 @@ No scraping/harvesting from ResearchGate, Academia.edu, Google Scholar, LinkedIn
 | **OpenAlex** | REST | Authors/works/institutions/topics/citations graph (§9) | Evidence (not authoritative) | CC0 data | "Data from OpenAlex" | `mailto` polite pool, cache, incremental | ✅ Integrated |
 | **ORCID** | Public API + OAuth | Researcher identity + verification (§10) | **Authoritative only after OAuth** | ORCID public data + user-authorized | Per ORCID policy | Permitted sync model | ✅ Integrated (OAuth + claiming) |
 | **OJS** | OAI-PMH / REST | Journal/article publishing metadata (§11) | Publisher author data | Per-install permission | Per-install | Webhook/scheduled | ✅ Integrated (Phase 4) |
-| **DataCite** | REST | Datasets/software/research objects as DOI objects (§4–§5) | Evidence (DOI research objects) | DataCite metadata terms — **review before F2** | Cite DataCite/DOI | Rate limit + cache | ⏳ F2 (pending review) |
+| **DataCite** | REST | Datasets/software/research objects as DOI objects (§4–§5) | Evidence (DOI research objects) | DataCite metadata terms — **final terms sign-off required before live enablement** | Cite DataCite/DOI | Rate limit + cache | 🟡 F2 adapter implemented (offline/fixture-tested); **live ingestion gated on terms sign-off** |
 | **PubMed / NCBI E-utilities** | E-utilities API | Biomedical/health metadata + MeSH (§6–§7) | Evidence (domain-specific) | NCBI usage policy — **review + API key + tool/email before F3** | Per NCBI policy | E-utilities rate limits (key required for higher) | ⏳ F3 (pending review) |
 | **ROR** | REST / data dump | Institution normalization (§8) | Institutional identity | CC0 | "Data from ROR" | Cache; dump-friendly | ⏳ F4 (pending review) |
 

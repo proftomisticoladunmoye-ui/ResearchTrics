@@ -31,5 +31,8 @@ export * from './discovery';
 export * from './claiming';
 export * from './invitations';
 export * from './review';
+export * from './research-outputs-discovery';
+// Re-export the federation toolkit (provider interface, adapters, health).
+export * from '@researchtrics/federation';
 // Re-export the discovery toolkit (provider interface, identity report, tokens).
 export * from '@researchtrics/discovery';

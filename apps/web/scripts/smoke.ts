@@ -264,6 +264,36 @@ async function main() {
     const afterUnsave = await core.listSavedOpportunities(reg.researcher.id);
     check('unsave removes the bookmark', !afterUnsave.some((o) => o.id === opp.id));
 
+    console.log('\nResearch graph (grounded projection + explainable paths)');
+    // Link the two researchers via a co-authored, researcher-attributed publication.
+    await prisma.publication.create({
+      data: {
+        publicId: 'RTP-90000001',
+        slug: 'graph-coauthored-smoke',
+        title: 'Graph Co-authored Work',
+        visibility: 'public',
+        authors: {
+          create: [
+            { authorOrder: 0, rawName: 'Ada Lovelace', researcherId: reg.researcher.id },
+            { authorOrder: 1, rawName: 'Alan Turing', researcherId: reg2.researcher.id },
+          ],
+        },
+      },
+    });
+
+    const ego = await core.buildResearcherEgoGraph(reg.researcher.id);
+    const coEdge = ego.edges.find((e) => e.type === 'co_authored' && e.target === reg2.researcher.id);
+    check('ego graph derives a co-author edge from real records', !!coEdge);
+    check('every graph edge is explained (Spec §29)', ego.edges.length > 0 && ego.edges.every((e) => e.label.length > 0), coEdge?.label);
+    check('co-author appears as a node in the ego graph', ego.nodes.some((n) => n.id === reg2.researcher.id && n.type === 'researcher'));
+
+    const netSummary = await core.getNetworkSummary(reg.researcher.id);
+    check('network summary counts the collaborator', netSummary.collaborators >= 1, `collaborators=${netSummary.collaborators}`);
+
+    const path = await core.getConnectionPath(reg.researcher.id, reg2.researcher.id);
+    check('connection path links the two researchers', path.connected && path.hops >= 1, `hops=${path.hops}`);
+    check('connection path explains each hop (Spec §29)', path.steps.length > 0 && path.steps.every((s) => s.reason.length > 0), path.steps[0]?.reason);
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

@@ -58,6 +58,11 @@ export default async function DashboardPage() {
           ) : null}
           {user.researcher ? (
             <Button asChild size="sm" variant="ghost">
+              <Link href={`/researchers/${user.researcher.slug}/network`}>My network</Link>
+            </Button>
+          ) : null}
+          {user.researcher ? (
+            <Button asChild size="sm" variant="ghost">
               <Link href={`/researchers/${user.researcher.slug}`}>View public profile</Link>
             </Button>
           ) : null}

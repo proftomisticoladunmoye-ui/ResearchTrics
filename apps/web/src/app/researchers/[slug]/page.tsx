@@ -122,6 +122,12 @@ export default async function ResearcherProfilePage({
             {viewer && !isOwner && viewer.researcher ? (
               <ConnectButton toResearcherId={r.id} />
             ) : null}
+            <Link
+              href={`/researchers/${r.slug}/network`}
+              className="text-sm text-rt-blue hover:underline"
+            >
+              Research network →
+            </Link>
           </div>
         </div>
       </div>

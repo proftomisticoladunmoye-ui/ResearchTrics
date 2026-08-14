@@ -141,6 +141,8 @@ export const RATE_LIMITS = {
   invite: { limit: 20, windowMs: 60 * 60_000 },
   /** Publication import-by-DOI per user. */
   importDoi: { limit: 60, windowMs: 60 * 60_000 },
+  /** File uploads per user. */
+  upload: { limit: 40, windowMs: 60 * 60_000 },
   /** Anonymous read-heavy API per IP. */
   publicApi: { limit: 120, windowMs: 60_000 },
 } as const satisfies Record<string, RateLimitRule>;

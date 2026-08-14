@@ -39,14 +39,22 @@ it falls back to the local-filesystem provider — so dev needs no bucket.
 Set these in `packages/db/.env` locally (gitignored) or the Render
 `researchtrics-secrets` group in production.
 
-## Access model
-- **Public objects** (open-access research files): if `OBJECT_STORAGE_PUBLIC_URL`
-  is set, `urlFor(key)` returns a direct public URL.
-- **Private / access-controlled objects**: `urlFor(key)` returns the app's
-  `/api/v1/files/<key>` route (to be served with `signedGetUrl` behind an
-  access check). The presigner is implemented; the file-serving route + upload
-  endpoint are a documented follow-up (upload is not yet wired into a route).
+## Upload + serve (wired)
+- **`POST /api/v1/files`** — multipart upload (`file` + optional `accessLevel`).
+  Auth + rate-limited (`upload`); enforces the MIME allow-list, the
+  `MAX_UPLOAD_BYTES` size cap, and image-only-PDF rejection; stores bytes in R2
+  and records only a reference + metadata in Postgres.
+- **`GET /api/v1/files/<key>`** — catch-all serve route. Authorizes against the
+  File's `accessLevel` (`canAccessFile`), then **redirects to a 5-minute
+  presigned URL** for R2 (offloads bandwidth) or streams bytes for local-fs.
+
+## Access model (§36)
+- **public** — anyone (public files may also be exposed via
+  `OBJECT_STORAGE_PUBLIC_URL` for a direct CDN URL).
+- **restricted / request** — any authenticated user (a formal request/approval
+  flow for `request` is a documented follow-up).
+- **embargoed / private** — uploader only (no embargo-expiry field yet).
 
 ## Deferred (documented)
-- `GET /api/v1/files/[key]` serving route (stream / redirect to a presigned URL
-  with an access-level check) and the upload endpoint that calls `storeFile`.
+- A UI upload control + progress; wiring uploaded files as a publication's
+  primary file; a formal `request`-access approval flow; embargo-expiry dates.

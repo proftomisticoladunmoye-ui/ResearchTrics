@@ -91,13 +91,26 @@ export class S3StorageProvider implements StorageProvider {
     return `/api/v1/files/${key}`;
   }
 
-  /** Presigned, time-limited GET URL for a private object (default 5 min). */
-  async signedGetUrl(key: string, expiresInSeconds = 300): Promise<string> {
+  /** Presigned, time-limited GET URL for an object (default 5 min). */
+  async signedUrl(key: string, expiresInSeconds = 300): Promise<string> {
     return getSignedUrl(
       this.client as S3Client,
       new GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
       { expiresIn: expiresInSeconds },
     );
+  }
+
+  /** Fetch object bytes (fallback path; prefer {@link signedUrl} for downloads). */
+  async read(key: string): Promise<Uint8Array | null> {
+    try {
+      const res = (await this.client.send(
+        new GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
+      )) as { Body?: { transformToByteArray?: () => Promise<Uint8Array> } };
+      if (!res.Body?.transformToByteArray) return null;
+      return await res.Body.transformToByteArray();
+    } catch {
+      return null;
+    }
   }
 
   /** True if the object exists (used by the live connectivity check). */

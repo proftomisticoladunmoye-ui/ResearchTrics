@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { isAllowedUploadMime, sha256, pdfLikelyHasText } from './storage';
+import {
+  isAllowedUploadMime,
+  sha256,
+  pdfLikelyHasText,
+  withinUploadSizeLimit,
+  canAccessFile,
+  MAX_UPLOAD_BYTES,
+} from './storage';
 
 describe('upload validation', () => {
   it('allows known scholarly MIME types and rejects others', () => {
@@ -13,6 +20,34 @@ describe('upload validation', () => {
     const b = sha256(new TextEncoder().encode('hello'));
     expect(a).toBe(b);
     expect(a).toHaveLength(64);
+  });
+});
+
+describe('withinUploadSizeLimit', () => {
+  it('rejects empty and oversized, accepts in-range', () => {
+    expect(withinUploadSizeLimit(0)).toBe(false);
+    expect(withinUploadSizeLimit(1)).toBe(true);
+    expect(withinUploadSizeLimit(MAX_UPLOAD_BYTES)).toBe(true);
+    expect(withinUploadSizeLimit(MAX_UPLOAD_BYTES + 1)).toBe(false);
+  });
+});
+
+describe('canAccessFile (§36)', () => {
+  const owner = { id: 'u1' };
+  const other = { id: 'u2' };
+  it('public is readable by anyone, even anonymous', () => {
+    expect(canAccessFile('public', { uploaderId: 'u1' }, null)).toBe(true);
+  });
+  it('restricted/request require any authenticated user', () => {
+    expect(canAccessFile('restricted', { uploaderId: 'u1' }, null)).toBe(false);
+    expect(canAccessFile('restricted', { uploaderId: 'u1' }, other)).toBe(true);
+    expect(canAccessFile('request', { uploaderId: 'u1' }, other)).toBe(true);
+  });
+  it('private/embargoed are uploader-only', () => {
+    expect(canAccessFile('private', { uploaderId: 'u1' }, owner)).toBe(true);
+    expect(canAccessFile('private', { uploaderId: 'u1' }, other)).toBe(false);
+    expect(canAccessFile('embargoed', { uploaderId: 'u1' }, other)).toBe(false);
+    expect(canAccessFile('embargoed', { uploaderId: 'u1' }, owner)).toBe(true);
   });
 });
 

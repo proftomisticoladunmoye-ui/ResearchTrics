@@ -25,6 +25,7 @@ process.env.DATABASE_URL = `postgresql://${USER}:${PASS}@localhost:${PORT}/${DB}
 process.env.SESSION_SECRET = 'x'.repeat(40);
 process.env.TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
 process.env.NODE_ENV = 'test';
+process.env.LOCAL_STORAGE_DIR = join(tmpdir(), 'researchtrics-smoke-storage');
 
 let pass = 0;
 let fail = 0;
@@ -573,6 +574,42 @@ async function main() {
     const auditBefore = await prisma.auditLog.count();
     await core.recordSecurityEvent({ action: 'smoke.security_event', entityType: 'researcher', entityId: reg.researcher.id, detail: { ok: true } });
     check('security event appended to audit log (§35)', (await prisma.auditLog.count()) === auditBefore + 1);
+
+    console.log('\nFile storage: upload → serve pipeline (local-fs, §46/§36)');
+    const stored = await core.storeFile({
+      data: new TextEncoder().encode('{"ok":true}'),
+      filename: 'meta.json',
+      mimeType: 'application/json',
+      accessLevel: 'public',
+      uploaderId: reg.user.id,
+    });
+    check(
+      'storeFile persists to object storage + records metadata (§46)',
+      /^[0-9a-f]{2}\//.test(stored.storageKey) && stored.url.includes('/api/v1/files/'),
+      stored.storageKey,
+    );
+    const readBack = await core.getStorageProvider().read?.(stored.storageKey);
+    check(
+      'stored bytes read back from the provider',
+      !!readBack && new TextDecoder().decode(readBack) === '{"ok":true}',
+    );
+    const meta = await core.getFileForServe(stored.storageKey);
+    check(
+      'serve metadata + public access resolve (§36)',
+      meta?.mimeType === 'application/json' && core.canAccessFile(meta.accessLevel, meta, null) === true,
+    );
+    check(
+      'private file is uploader-only (§36)',
+      core.canAccessFile('private', { uploaderId: reg.user.id }, { id: reg.user.id }) === true &&
+        core.canAccessFile('private', { uploaderId: reg.user.id }, { id: 'someone-else' }) === false,
+    );
+    let emptyRejected = false;
+    try {
+      await core.storeFile({ data: new Uint8Array(0), filename: 'empty.json', mimeType: 'application/json' });
+    } catch {
+      emptyRejected = true;
+    }
+    check('empty upload rejected by size guard (§35)', emptyRejected);
 
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);

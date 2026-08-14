@@ -1,8 +1,15 @@
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { prisma, type PrismaClient, type FileAccessLevel } from '@researchtrics/db';
 import { badRequest } from './errors';
+
+/** Maximum upload size (Spec §35, §46). 25 MB — generous for PDFs/datasets. */
+export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+export function withinUploadSizeLimit(byteLength: number): boolean {
+  return byteLength > 0 && byteLength <= MAX_UPLOAD_BYTES;
+}
 
 /**
  * File storage (Spec §46). Object-storage refs only — never blobs in Postgres.
@@ -51,6 +58,13 @@ export interface StorageProvider {
   put(key: string, data: Uint8Array, contentType: string): Promise<void>;
   /** A resolvable URL/reference for the stored object. */
   urlFor(key: string): string;
+  /** Read bytes back, or null if absent (used to stream local files). */
+  read?(key: string): Promise<Uint8Array | null>;
+  /**
+   * A time-limited direct URL for the object, or null if the provider can't
+   * issue one (local-fs). Used to offload downloads to the object store.
+   */
+  signedUrl?(key: string, expiresInSeconds?: number): Promise<string | null>;
   readonly name: string;
 }
 
@@ -63,6 +77,14 @@ export class LocalFsStorageProvider implements StorageProvider {
     const path = join(this.root, key);
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, data);
+  }
+
+  async read(key: string): Promise<Uint8Array | null> {
+    try {
+      return new Uint8Array(await readFile(join(this.root, key)));
+    } catch {
+      return null;
+    }
   }
 
   urlFor(key: string): string {
@@ -127,6 +149,9 @@ export async function storeFile(
   if (!isAllowedUploadMime(input.mimeType)) {
     throw badRequest(`Unsupported file type: ${input.mimeType}`);
   }
+  if (!withinUploadSizeLimit(input.data.length)) {
+    throw badRequest(`File must be between 1 byte and ${MAX_UPLOAD_BYTES} bytes`);
+  }
   const checksum = sha256(input.data);
 
   let pdfHasText: boolean | null = null;
@@ -155,4 +180,45 @@ export async function storeFile(
   });
 
   return { id: file.id, storageKey, url: getStorageProvider().urlFor(storageKey), pdfHasText };
+}
+
+export interface ServableFile {
+  storageKey: string;
+  filename: string;
+  mimeType: string;
+  accessLevel: FileAccessLevel;
+  uploaderId: string | null;
+}
+
+/** Metadata needed to authorize + serve a stored object (Spec §36, §46). */
+export async function getFileForServe(
+  storageKey: string,
+  client: PrismaClient = prisma,
+): Promise<ServableFile | null> {
+  const file = await client.file.findUnique({
+    where: { storageKey },
+    select: { storageKey: true, filename: true, mimeType: true, accessLevel: true, uploaderId: true },
+  });
+  return file;
+}
+
+/**
+ * Decide whether `user` may read a file at `accessLevel` (Spec §36).
+ * - public: anyone.
+ * - restricted / request: any authenticated user (a formal request/approval
+ *   flow for `request` is a documented follow-up).
+ * - embargoed / private: only the uploader (no embargo-expiry field yet).
+ */
+export function canAccessFile(
+  accessLevel: FileAccessLevel,
+  file: { uploaderId: string | null },
+  user: { id: string } | null,
+): boolean {
+  if (accessLevel === 'public') return true;
+  if (!user) return false;
+  if (accessLevel === 'private' || accessLevel === 'embargoed') {
+    return file.uploaderId === user.id;
+  }
+  // restricted | request
+  return true;
 }

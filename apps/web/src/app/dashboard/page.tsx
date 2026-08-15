@@ -27,7 +27,7 @@ export default async function DashboardPage() {
           <p className="text-sm text-rt-muted">Welcome</p>
           <h1 className="text-2xl font-semibold text-rt-text">{name}</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {user.researcher ? (
             <Badge variant="gold" className="font-mono">
               {user.researcher.researchtricsId}

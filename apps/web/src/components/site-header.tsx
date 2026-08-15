@@ -37,6 +37,30 @@ export async function SiteHeader() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Mobile menu (CSS-only disclosure — no client JS) */}
+          <details className="relative md:hidden">
+            <summary
+              className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded border border-rt-border text-lg text-rt-text [&::-webkit-details-marker]:hidden"
+              aria-label="Open menu"
+            >
+              <span aria-hidden>☰</span>
+            </summary>
+            <nav
+              aria-label="Mobile"
+              className="absolute right-0 top-11 z-50 w-56 rounded border border-rt-border bg-rt-white p-2 shadow-lg"
+            >
+              {NAV.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="block rounded px-3 py-2 text-sm text-rt-text hover:bg-rt-blue-light"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+          </details>
+
           {user ? (
             <>
               <Link

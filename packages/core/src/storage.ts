@@ -182,6 +182,40 @@ export async function storeFile(
   return { id: file.id, storageKey, url: getStorageProvider().urlFor(storageKey), pdfHasText };
 }
 
+export interface UploadedFileSummary {
+  id: string;
+  storageKey: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  accessLevel: FileAccessLevel;
+  url: string;
+  createdAt: Date;
+}
+
+/** A researcher's own uploaded files, newest first (dashboard listing). */
+export async function listFilesByUploader(
+  uploaderId: string,
+  client: PrismaClient = prisma,
+): Promise<UploadedFileSummary[]> {
+  const files = await client.file.findMany({
+    where: { uploaderId },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+  });
+  const provider = getStorageProvider();
+  return files.map((f) => ({
+    id: f.id,
+    storageKey: f.storageKey,
+    filename: f.filename,
+    mimeType: f.mimeType,
+    sizeBytes: f.sizeBytes,
+    accessLevel: f.accessLevel,
+    url: provider.urlFor(f.storageKey),
+    createdAt: f.createdAt,
+  }));
+}
+
 export interface ServableFile {
   storageKey: string;
   filename: string;

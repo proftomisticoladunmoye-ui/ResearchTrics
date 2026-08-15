@@ -51,6 +51,9 @@ export default async function DashboardPage() {
           <Button asChild size="sm" variant="ghost">
             <Link href="/dashboard/opportunities">Opportunities</Link>
           </Button>
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/dashboard/files">Files</Link>
+          </Button>
           {user.researcher ? (
             <Button asChild size="sm" variant="ghost">
               <Link href="/dashboard/visibility-audit">Visibility audit</Link>

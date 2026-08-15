@@ -50,6 +50,7 @@ export function middleware(_req: NextRequest): NextResponse {
 }
 
 export const config = {
-  // Apply to all routes except Next internals and common static assets.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.*).*)'],
+  // Apply to all routes except Next internals, common static assets, and the
+  // Google Search Console verification file (served pristine from /public).
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.*|google[0-9a-f]+\\.html).*)'],
 };

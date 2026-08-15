@@ -7,7 +7,9 @@ export default defineConfig({
   platform: 'node',
   clean: true,
   sourcemap: true,
-  // Bundle workspace TS packages; keep runtime + native deps external.
+  // Bundle workspace TS packages + pure-JS deps; keep only native / heavy
+  // runtime packages external (they are declared as worker dependencies so
+  // pnpm installs them where the bundle can resolve them at runtime).
   noExternal: [/^@researchtrics\//],
   external: [
     'bullmq',
@@ -16,6 +18,5 @@ export default defineConfig({
     '@prisma/client',
     '.prisma/client',
     '@node-rs/argon2',
-    'fast-xml-parser',
   ],
 });

@@ -1,6 +1,41 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button, Card, Badge } from '@researchtrics/ui';
 import { NetworkHero } from '@/components/network-hero';
+
+const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+
+export const metadata: Metadata = {
+  // Canonical to the homepage on the primary domain — prevents the Render
+  // *.onrender.com mirror from being indexed as duplicate content.
+  alternates: { canonical: '/' },
+};
+
+// Organization + WebSite structured data (schema.org). The WebSite SearchAction
+// makes the site eligible for a Google sitelinks search box.
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      name: 'ResearchTrics',
+      url: appUrl,
+      logo: `${appUrl}/logo.png`,
+      description:
+        'A global research visibility platform: researcher identity, scholarly outputs, discovery, collaboration, and the Research Visibility Metric (RVM).',
+    },
+    {
+      '@type': 'WebSite',
+      name: 'ResearchTrics',
+      url: appUrl,
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: { '@type': 'EntryPoint', urlTemplate: `${appUrl}/discover?q={search_term_string}` },
+        'query-input': 'required name=search_term_string',
+      },
+    },
+  ],
+};
 
 const CAPABILITIES = [
   {
@@ -44,6 +79,10 @@ const RVM_DIMENSIONS = [
 export default function HomePage() {
   return (
     <div>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Hero */}
       <section className="border-b border-rt-border bg-gradient-to-b from-rt-blue-light to-rt-white">
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-20 md:grid-cols-2">

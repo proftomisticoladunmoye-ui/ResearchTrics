@@ -611,6 +611,31 @@ async function main() {
     }
     check('empty upload rejected by size guard (§35)', emptyRejected);
 
+    console.log('\nOpportunity lifecycle: auto-expire past-deadline listings (§85)');
+    const adminActorOpp = { userId: reg.user.id, roles: [{ role: 'platform_admin' as const, scopeType: 'global' as const, scopeId: null }] };
+    const pastOpp = await core.createOpportunity(adminActorOpp, {
+      title: 'Expired grant call',
+      type: 'grant',
+      deadline: new Date(Date.now() - 24 * 3600_000),
+    });
+    const futureOpp = await core.createOpportunity(adminActorOpp, {
+      title: 'Open grant call',
+      type: 'grant',
+      deadline: new Date(Date.now() + 24 * 3600_000),
+    });
+    const swept = await core.expireOpportunities();
+    const pastAfter = await core.getOpportunityBySlug(pastOpp.slug);
+    const futureAfter = await core.getOpportunityBySlug(futureOpp.slug);
+    check(
+      'expiry closes past-deadline listings, leaves live ones open (§85)',
+      swept.closed >= 1 && pastAfter?.status === 'closed' && futureAfter?.status === 'open',
+      `closed=${swept.closed} past=${pastAfter?.status} future=${futureAfter?.status}`,
+    );
+    check(
+      'expiry is a soft transition — never deletes (provenance kept)',
+      !!pastAfter && pastAfter.publicId === pastOpp.publicId,
+    );
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

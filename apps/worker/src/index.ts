@@ -5,6 +5,7 @@ import { syncOjsSource } from '@researchtrics/integration-ojs';
 import {
   runDiscovery,
   createDiscoveryProvider,
+  expireOpportunities,
   type DiscoveryProviderName,
   type DiscoveryQuery,
 } from '@researchtrics/core';
@@ -76,12 +77,32 @@ const discoveryWorker = new Worker(
 );
 discoveryWorker.on('failed', (job, err) => logger.error({ jobId: job?.id, err }, 'Discovery run failed'));
 
+// Opportunity lifecycle: auto-close listings past their deadline (Spec §85).
+const opportunityQueue = new Queue(QUEUES.opportunityExpire, { connection, defaultJobOptions });
+const opportunityWorker = new Worker(
+  QUEUES.opportunityExpire,
+  async (job: Job) => {
+    const result = await expireOpportunities();
+    logger.info({ jobId: job.id, ...result }, 'Opportunity expiry sweep complete');
+    return result;
+  },
+  { connection, concurrency: 1 },
+);
+opportunityWorker.on('failed', (job, err) =>
+  logger.error({ jobId: job?.id, err }, 'Opportunity expiry failed'),
+);
+
 async function bootstrap(): Promise<void> {
   logger.info({ redisUrl: redisUrl.replace(/:[^:@/]*@/, ':****@') }, 'Starting ResearchTrics worker');
   // Enqueue a self-check so the pipeline is exercised on boot.
   await healthQueue.add('boot-check', { source: 'bootstrap' }).catch((err) => {
     logger.warn({ err }, 'Could not enqueue boot-check (is Redis up?)');
   });
+  // Sweep expired opportunities now, then hourly (idempotent, deduped by jobId).
+  await opportunityQueue.add('sweep', {}).catch(() => {});
+  await opportunityQueue
+    .add('sweep', {}, { repeat: { every: 60 * 60 * 1000 }, jobId: 'opportunity-expire-hourly' })
+    .catch((err) => logger.warn({ err }, 'Could not schedule opportunity expiry'));
 }
 
 async function shutdown(signal: string): Promise<void> {
@@ -89,7 +110,9 @@ async function shutdown(signal: string): Promise<void> {
   await healthWorker.close();
   await ojsWorker.close();
   await discoveryWorker.close();
+  await opportunityWorker.close();
   await healthQueue.close();
+  await opportunityQueue.close();
   await connection.quit();
   process.exit(0);
 }

@@ -16,6 +16,7 @@ export const QUEUES = {
   analyticsAggregate: 'analytics.aggregate',
   email: 'email.send',
   notification: 'notification.dispatch',
+  opportunityExpire: 'opportunity.expire',
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];

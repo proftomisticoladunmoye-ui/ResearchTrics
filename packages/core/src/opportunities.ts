@@ -140,6 +140,25 @@ export async function setOpportunityStatus(
   ]);
 }
 
+/**
+ * Auto-close opportunities whose deadline has passed (Spec §85). A soft
+ * lifecycle transition only — `open` → `closed`; it never deletes, so
+ * provenance, saved references, and history are preserved. Idempotent (already
+ * closed/archived rows are untouched). `now` is injectable for deterministic
+ * tests. Returns how many listings were closed.
+ */
+export async function expireOpportunities(
+  now: Date = new Date(),
+  client: PrismaClient = prisma,
+): Promise<{ closed: number }> {
+  const res = await client.opportunity.updateMany({
+    // `deadline: { lt: now }` already excludes nulls (never-expiring listings).
+    where: { status: 'open', deletedAt: null, deadline: { lt: now } },
+    data: { status: 'closed' },
+  });
+  return { closed: res.count };
+}
+
 // ---------- Public reads ----------
 
 const listSelect = {

@@ -48,6 +48,7 @@ export interface ProfileUpdate {
   city?: string | null;
   academicRank?: string | null;
   website?: string | null;
+  photoUrl?: string | null;
   researcherType?: Prisma.ResearcherUpdateInput['researcherType'];
   careerStage?: Prisma.ResearcherUpdateInput['careerStage'];
   profileVisibility?: Prisma.ResearcherUpdateInput['profileVisibility'];

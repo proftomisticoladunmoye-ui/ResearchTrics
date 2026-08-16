@@ -5,6 +5,18 @@ import type { OpportunityType } from '@researchtrics/db';
 import { Card, Badge } from '@researchtrics/ui';
 import { TYPE_LABELS } from '@/lib/opportunity-labels';
 
+/** Filter chips shown above the list — jobs surfaced explicitly. */
+const FILTERS: Array<{ type?: OpportunityType; label: string }> = [
+  { label: 'All' },
+  { type: 'grant', label: 'Grants' },
+  { type: 'fellowship', label: 'Fellowships' },
+  { type: 'position', label: 'Jobs' },
+  { type: 'call_for_papers', label: 'Calls for papers' },
+  { type: 'conference', label: 'Conferences' },
+  { type: 'award', label: 'Awards' },
+  { type: 'training', label: 'Training' },
+];
+
 export const metadata: Metadata = {
   title: 'Opportunities',
   description: 'Grants, fellowships, calls, and positions for researchers.',
@@ -37,6 +49,30 @@ export default async function OpportunitiesPage({
           </p>
         </div>
         <span className="text-sm text-rt-muted">{total} open</span>
+      </div>
+
+      {/* Type filter chips (jobs surfaced explicitly) */}
+      <div className="mt-5 flex flex-wrap gap-2">
+        {FILTERS.map((f) => {
+          const active = (f.type ?? undefined) === type;
+          const params = new URLSearchParams();
+          if (f.type) params.set('type', f.type);
+          if (sp.q) params.set('q', sp.q);
+          const href = params.toString() ? `/opportunities?${params.toString()}` : '/opportunities';
+          return (
+            <Link
+              key={f.label}
+              href={href}
+              className={
+                active
+                  ? 'rounded-full bg-rt-blue px-3 py-1 text-sm font-medium text-rt-white'
+                  : 'rounded-full border border-rt-border px-3 py-1 text-sm text-rt-muted hover:border-rt-blue hover:text-rt-blue'
+              }
+            >
+              {f.label}
+            </Link>
+          );
+        })}
       </div>
 
       {items.length === 0 ? (

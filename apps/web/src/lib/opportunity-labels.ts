@@ -6,7 +6,7 @@ export const TYPE_LABELS: Record<OpportunityType, string> = {
   fellowship: 'Fellowship',
   call_for_papers: 'Call for papers',
   conference: 'Conference',
-  position: 'Position',
+  position: 'Job / Position',
   award: 'Award',
   training: 'Training',
   collaboration: 'Collaboration',

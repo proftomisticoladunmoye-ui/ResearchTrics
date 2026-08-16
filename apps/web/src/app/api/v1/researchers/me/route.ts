@@ -16,6 +16,7 @@ const patchSchema = z.object({
   city: z.string().max(80).nullish(),
   academicRank: z.string().max(120).nullish(),
   website: z.string().url().max(300).nullish().or(z.literal('')),
+  photoUrl: z.string().max(500).nullish().or(z.literal('')),
   profileVisibility: z.enum(['public', 'researchers', 'institution', 'private']).optional(),
   interests: z.array(z.string().min(1).max(80)).max(30).optional(),
 });
@@ -33,10 +34,14 @@ export async function PATCH(req: NextRequest) {
     const parsed = patchSchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) throw validationError('Invalid profile update', parsed.error.flatten());
 
-    const { interests, website, ...profile } = parsed.data;
+    const { interests, website, photoUrl, ...profile } = parsed.data;
     await updateProfile(
       user.researcher.id,
-      { ...profile, ...(website !== undefined ? { website: website === '' ? null : website } : {}) },
+      {
+        ...profile,
+        ...(website !== undefined ? { website: website === '' ? null : website } : {}),
+        ...(photoUrl !== undefined ? { photoUrl: photoUrl === '' ? null : photoUrl } : {}),
+      },
       user.id,
     );
     if (interests) await setInterests(user.researcher.id, interests);

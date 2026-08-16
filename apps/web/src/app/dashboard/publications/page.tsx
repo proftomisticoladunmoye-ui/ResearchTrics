@@ -5,6 +5,7 @@ import { prisma } from '@researchtrics/db';
 import { Card, Badge } from '@researchtrics/ui';
 import { getCurrentUser } from '@/lib/current-user';
 import { ImportDoiForm } from '@/components/import-doi-form';
+import { AddPublicationForm } from '@/components/add-publication-form';
 
 export const metadata: Metadata = {
   title: 'My publications',
@@ -28,9 +29,23 @@ export default async function DashboardPublicationsPage() {
       <h1 className="text-2xl font-semibold text-rt-text">My publications</h1>
 
       <Card className="mt-6 p-6">
-        <h2 className="text-base font-semibold text-rt-text">Import a publication</h2>
+        <h2 className="text-base font-semibold text-rt-text">Import by DOI</h2>
+        <p className="mt-1 text-xs text-rt-muted">
+          For journal articles and anything with a DOI — metadata is fetched from Crossref.
+        </p>
         <div className="mt-3">
           <ImportDoiForm />
+        </div>
+      </Card>
+
+      <Card className="mt-6 p-6">
+        <h2 className="text-base font-semibold text-rt-text">Add manually</h2>
+        <p className="mt-1 text-xs text-rt-muted">
+          For books, chapters, presentations, posters, theses, and reports — anything without a DOI.
+          Optionally attach the file.
+        </p>
+        <div className="mt-3">
+          <AddPublicationForm />
         </div>
       </Card>
 

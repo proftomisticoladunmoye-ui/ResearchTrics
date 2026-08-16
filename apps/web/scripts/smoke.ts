@@ -656,6 +656,23 @@ async function main() {
       grantsGovMapped?.type === 'grant' && grantsGovMapped?.country === 'US' && !!grantsGovMapped?.sourceUrl,
     );
 
+    console.log('\nProfile robustness: photo + manual publication (§9/§11)');
+    await core.updateProfile(reg.researcher.id, { photoUrl: 'https://cdn.example.org/x/photo.png' }, reg.user.id);
+    const withPhoto = await core.getResearcherBySlug(reg.researcher.slug);
+    check('profile photo can be set + read back', withPhoto?.photoUrl === 'https://cdn.example.org/x/photo.png');
+
+    const manualPub = await core.createManualPublication(reg.researcher.id, reg.researcher.displayName, {
+      title: 'A Monograph Without a DOI',
+      outputType: 'book',
+      publishedYear: 2026,
+      publisher: 'Example Press',
+    });
+    check('manual publication created + RTP id', manualPub.status === 'created' && !!manualPub.slug);
+    const myPubs = await prisma.publicationAuthor.count({ where: { researcherId: reg.researcher.id } });
+    check('manual publication is linked to its author (shows on profile)', myPubs >= 1, `authorships=${myPubs}`);
+    const loadedManual = await core.getPublicationBySlug(manualPub.slug);
+    check('manual publication loads with its type (book)', loadedManual?.outputType === 'book');
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

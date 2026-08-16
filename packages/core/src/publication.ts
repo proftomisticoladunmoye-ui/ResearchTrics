@@ -76,6 +76,68 @@ export interface CreatePublicationResult {
   slug: string;
 }
 
+export interface ManualPublicationInput {
+  title: string;
+  outputType?: string;
+  abstract?: string | null;
+  publishedYear?: number | null;
+  venue?: string | null; // journal / conference / publisher venue
+  publisher?: string | null;
+  /** An uploaded file's storage id to attach as the primary file. */
+  primaryFileId?: string | null;
+}
+
+/**
+ * Create a publication the researcher enters by hand (Spec §9, §11) — for
+ * outputs without a DOI (books, presentations, reports, theses). DOI'd works use
+ * the import-by-DOI flow instead. The current researcher is linked as the first
+ * author so it appears on their profile immediately.
+ */
+export async function createManualPublication(
+  researcherId: string,
+  authorName: string,
+  input: ManualPublicationInput,
+  client: PrismaClient = prisma,
+): Promise<CreatePublicationResult> {
+  const title = input.title.trim();
+  if (!title) throw notFound('A title is required');
+  const outputType = (
+    input.outputType && OUTPUT_TYPES.has(input.outputType) ? input.outputType : 'journal_article'
+  ) as Prisma.PublicationCreateInput['outputType'];
+
+  const serial = await nextPublicationSerial(client);
+  const publicId = formatOutputId('publication', serial);
+  const slug = slugWithSuffix(title, String(serial));
+
+  const journalId = input.venue
+    ? await upsertJournal({ name: input.venue, publisher: input.publisher ?? undefined }, client)
+    : null;
+
+  const pub = await client.publication.create({
+    data: {
+      publicId,
+      slug,
+      title,
+      abstract: input.abstract ?? null,
+      outputType,
+      journalId,
+      publisher: input.publisher ?? null,
+      publishedYear: input.publishedYear ?? null,
+      primaryFileId: input.primaryFileId ?? null,
+      authors: {
+        create: {
+          researcherId,
+          authorOrder: 0,
+          rawName: authorName,
+          matchConfidence: 1,
+        },
+      },
+    },
+  });
+
+  return { status: 'created', publicationId: pub.id, slug };
+}
+
 /** Find an existing publication id by DOI, if any. */
 export async function findPublicationByDoi(
   doi: string,

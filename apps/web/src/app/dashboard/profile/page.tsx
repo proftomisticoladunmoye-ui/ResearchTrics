@@ -5,6 +5,7 @@ import { getResearcherByUserId } from '@researchtrics/core';
 import { Card, Alert, Button, Badge, OrcidBadge, VerificationBadge } from '@researchtrics/ui';
 import { getCurrentUser } from '@/lib/current-user';
 import { ProfileEditForm } from '@/components/profile-edit-form';
+import { PhotoUpload } from '@/components/photo-upload';
 
 export const metadata: Metadata = {
   title: 'Edit profile',
@@ -81,6 +82,13 @@ export default async function DashboardProfilePage({
               <a href="/api/v1/integrations/orcid/connect">Connect ORCID</a>
             </Button>
           )}
+        </div>
+      </Card>
+
+      <Card className="mt-6 p-5">
+        <h2 className="text-base font-semibold text-rt-text">Profile photo</h2>
+        <div className="mt-4">
+          <PhotoUpload name={researcher.displayName} currentUrl={researcher.photoUrl} />
         </div>
       </Card>
 

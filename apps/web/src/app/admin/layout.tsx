@@ -11,6 +11,7 @@ const ADMIN_NAV = [
   { href: '/admin', label: 'Overview' },
   { href: '/admin/ojs', label: 'OJS Sync' },
   { href: '/admin/discovery', label: 'Discovery' },
+  { href: '/admin/opportunities', label: 'Opportunities' },
   { href: '/admin/review', label: 'Review' },
   { href: '/admin/sources', label: 'Sources' },
   { href: '/admin/quality', label: 'Quality' },

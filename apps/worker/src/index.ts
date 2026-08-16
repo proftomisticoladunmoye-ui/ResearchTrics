@@ -135,6 +135,10 @@ async function bootstrap(): Promise<void> {
     .map((s) => s.trim())
     .filter(Boolean) as OpportunitySourceName[];
   for (const source of enabled) {
+    // Run once now (repeatable jobs don't fire immediately), then daily.
+    await ingestQueue
+      .add('ingest', { source, rows: 100 })
+      .catch((err) => logger.warn({ err, source }, 'Could not enqueue initial ingestion'));
     await ingestQueue
       .add(
         'ingest',
@@ -142,7 +146,7 @@ async function bootstrap(): Promise<void> {
         { repeat: { every: 24 * 60 * 60 * 1000 }, jobId: `opportunity-ingest-${source}` },
       )
       .catch((err) => logger.warn({ err, source }, 'Could not schedule opportunity ingestion'));
-    logger.info({ source }, 'Opportunity ingestion scheduled');
+    logger.info({ source }, 'Opportunity ingestion scheduled (immediate + daily)');
   }
 }
 

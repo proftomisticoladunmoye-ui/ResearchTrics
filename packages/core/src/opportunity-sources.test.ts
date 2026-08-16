@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   mapGrantsGov,
   GrantsGovProvider,
+  mapEuFunding,
+  EuFundingProvider,
   FixtureOpportunityProvider,
   createOpportunityProvider,
 } from './opportunity-sources';
@@ -72,6 +74,59 @@ describe('GrantsGovProvider (injected fetch — offline)', () => {
   });
 });
 
+describe('mapEuFunding (SEDIA metadata-array shape)', () => {
+  it('maps an open call with ISO deadline parsing', () => {
+    const o = mapEuFunding({
+      reference: 'ref-1',
+      url: 'https://ec.europa.eu/info/funding-tenders/opportunities/portal/x',
+      metadata: {
+        identifier: ['HORIZON-CL1-2026'],
+        title: ['Digital Health Call'],
+        status: ['31094502'], // open
+        deadlineDate: ['2026-09-15T17:00:00+02:00'],
+      },
+    });
+    expect(o).not.toBeNull();
+    expect(o!.externalId).toBe('HORIZON-CL1-2026');
+    expect(o!.title).toBe('Digital Health Call');
+    expect(o!.country).toBe('EU');
+    expect(o!.organization).toBe('European Commission');
+    expect(o!.deadline?.getUTCFullYear()).toBe(2026);
+  });
+
+  it('skips closed calls and records missing title/id', () => {
+    expect(mapEuFunding({ metadata: { status: ['31094503'], title: ['Closed'], identifier: ['x'] } })).toBeNull();
+    expect(mapEuFunding({ metadata: { identifier: ['no-title'] } })).toBeNull();
+  });
+
+  it('tolerates missing/invalid deadline', () => {
+    const o = mapEuFunding({ reference: 'r', metadata: { title: ['Call'], deadlineDate: ['bad'] } });
+    expect(o!.deadline).toBeUndefined();
+  });
+});
+
+describe('EuFundingProvider (injected fetch — offline)', () => {
+  it('posts to the SEDIA search endpoint and maps results', async () => {
+    let calledUrl = '';
+    const fakeFetch = (async (url: string) => {
+      calledUrl = url;
+      return {
+        ok: true,
+        json: async () => ({
+          results: [
+            { reference: 'A', url: 'https://ec.europa.eu/a', metadata: { title: ['Call A'], identifier: ['A'], status: ['31094502'] } },
+            { reference: 'C', metadata: { title: ['Closed C'], identifier: ['C'], status: ['31094503'] } },
+          ],
+        }),
+      };
+    }) as unknown as typeof fetch;
+    const items = await new EuFundingProvider({ fetchImpl: fakeFetch }).fetchOpportunities({ rows: 5 });
+    expect(calledUrl).toContain('apiKey=SEDIA');
+    expect(items).toHaveLength(1); // closed one dropped
+    expect(items[0]!.title).toBe('Call A');
+  });
+});
+
 describe('provider factory + fixture', () => {
   it('fixture returns deterministic sample data', async () => {
     const items = await new FixtureOpportunityProvider().fetchOpportunities({});
@@ -80,6 +135,7 @@ describe('provider factory + fixture', () => {
   });
   it('factory resolves names', () => {
     expect(createOpportunityProvider('grants_gov').name).toBe('grants_gov');
+    expect(createOpportunityProvider('eu_funding').name).toBe('eu_funding');
     expect(createOpportunityProvider('fixture').name).toBe('fixture');
   });
 });

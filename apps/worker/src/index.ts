@@ -104,6 +104,7 @@ const ingestWorker = new Worker(
     const { source, keyword, rows } = job.data;
     const provider = createOpportunityProvider(source, {
       grantsGov: { baseUrl: process.env.GRANTS_GOV_BASE_URL },
+      euFunding: { baseUrl: process.env.EU_FUNDING_BASE_URL },
     });
     const result = await ingestOpportunities(provider, { keyword, rows });
     logger.info({ jobId: job.id, ...result }, 'Opportunity ingestion complete');

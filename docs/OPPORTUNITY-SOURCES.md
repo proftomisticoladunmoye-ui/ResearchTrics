@@ -33,10 +33,17 @@ unset (the default), no live ingestion runs.
 |---|---|---|---|
 | **Fixture** | `fixture` | ✅ built (offline sample data) | n/a |
 | **Grants.gov** (US federal funding) | `grants_gov` | ✅ built, **gated** | US-government open data; review Grants.gov API terms before enabling |
-| UKRI Gateway to Research | — | ⬜ planned | Review before build |
-| EU Funding & Tenders / OpenAIRE | — | ⬜ planned | Review before build |
-| NIH (Guide/RePORTER) | — | ⬜ planned | Review before build |
+| **EU Funding & Tenders** (SEDIA) | `eu_funding` | ✅ built, **gated** — *verify fields on first live enable* | Review EU F&T API terms before enabling |
+| UKRI Gateway to Research | — | ❌ not a fit | GtR API returns **awarded projects**, not open calls |
+| NIH (Guide/RePORTER) | — | ⬜ deferred | Guide RSS blocks bots; RePORTER is awarded projects |
 | Conference / CFP feeds | — | ⬜ planned | Terms need careful review |
+
+> **EU Funding & Tenders caveat:** built against the *documented* SEDIA response
+> shape (metadata-as-arrays, coded statuses: forthcoming/open/closed). Because the
+> live API is POST-only and couldn't be sampled during build, the field mapping
+> should be verified against a real response the first time it is enabled — the
+> mapper skips malformed records rather than corrupting data, and it is off by
+> default. Base URL override: `EU_FUNDING_BASE_URL`.
 
 ## Grants.gov specifics
 - Uses the public **Search2 API** (`POST /v1/api/search2`, `oppStatuses: posted`).

@@ -145,17 +145,108 @@ export class GrantsGovProvider implements OpportunityProvider {
   }
 }
 
+// ---------- EU Funding & Tenders Portal (SEDIA search API) ----------
+
+export interface EuFundingConfig {
+  /** Defaults to the public SEDIA search API. */
+  baseUrl?: string;
+  fetchImpl?: typeof fetch;
+}
+
+/**
+ * SEDIA status codes for a call's lifecycle. We skip closed calls at map time;
+ * forthcoming/open are ingested and later auto-closed by the deadline sweep.
+ */
+const EU_STATUS = { forthcoming: '31094501', open: '31094502', closed: '31094503' } as const;
+
+/** One SEDIA search result. Metadata values are arrays of strings. */
+interface EuFundingResult {
+  reference?: string;
+  url?: string;
+  title?: string;
+  metadata?: {
+    identifier?: string[];
+    title?: string[];
+    status?: string[];
+    deadlineDate?: string[];
+    startDate?: string[];
+  };
+}
+
+/** Pure mapper: a SEDIA result → NormalizedOpportunity (skips closed/invalid). */
+export function mapEuFunding(result: EuFundingResult): NormalizedOpportunity | null {
+  const md = result.metadata ?? {};
+  const title = (md.title?.[0] ?? result.title)?.trim();
+  const id = md.identifier?.[0] ?? result.reference;
+  if (!title || !id) return null;
+  if (md.status?.[0] === EU_STATUS.closed) return null;
+
+  const deadlineRaw = md.deadlineDate?.[0];
+  const deadline = deadlineRaw ? new Date(deadlineRaw) : undefined;
+  const startRaw = md.startDate?.[0];
+  const opensAt = startRaw ? new Date(startRaw) : undefined;
+
+  return {
+    externalId: id,
+    title,
+    type: 'grant',
+    organization: 'European Commission',
+    country: 'EU',
+    url: result.url,
+    sourceUrl: result.url,
+    opensAt: opensAt && !Number.isNaN(opensAt.getTime()) ? opensAt : undefined,
+    deadline: deadline && !Number.isNaN(deadline.getTime()) ? deadline : undefined,
+  };
+}
+
+export class EuFundingProvider implements OpportunityProvider {
+  readonly name = 'eu_funding';
+  private readonly baseUrl: string;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(config: EuFundingConfig = {}) {
+    this.baseUrl = (config.baseUrl ?? 'https://api.tech.ec.europa.eu/search-api/prod/rest/search').replace(
+      /\/$/,
+      '',
+    );
+    this.fetchImpl = config.fetchImpl ?? fetch;
+  }
+
+  async fetchOpportunities(query: OpportunityQuery): Promise<NormalizedOpportunity[]> {
+    const url = `${this.baseUrl}?apiKey=SEDIA&text=${encodeURIComponent(query.keyword ?? '***')}&pageSize=${query.rows ?? 50}&pageNumber=1`;
+    const res = await this.fetchImpl(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      // Grants database, forthcoming + open calls.
+      body: JSON.stringify({
+        query: {
+          bool: {
+            must: [{ terms: { status: [EU_STATUS.forthcoming, EU_STATUS.open] } }],
+          },
+        },
+      }),
+    });
+    if (!res.ok) throw new Error(`EU Funding search failed: ${res.status}`);
+    const json = (await res.json()) as { results?: EuFundingResult[] };
+    return (json.results ?? [])
+      .map(mapEuFunding)
+      .filter((o): o is NormalizedOpportunity => o !== null);
+  }
+}
+
 // ---------- Factory ----------
 
-export type OpportunitySourceName = 'fixture' | 'grants_gov';
+export type OpportunitySourceName = 'fixture' | 'grants_gov' | 'eu_funding';
 
 export function createOpportunityProvider(
   name: OpportunitySourceName,
-  config: { grantsGov?: GrantsGovConfig } = {},
+  config: { grantsGov?: GrantsGovConfig; euFunding?: EuFundingConfig } = {},
 ): OpportunityProvider {
   switch (name) {
     case 'grants_gov':
       return new GrantsGovProvider(config.grantsGov);
+    case 'eu_funding':
+      return new EuFundingProvider(config.euFunding);
     case 'fixture':
     default:
       return new FixtureOpportunityProvider();

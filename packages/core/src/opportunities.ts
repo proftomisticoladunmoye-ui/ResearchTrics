@@ -3,6 +3,8 @@ import { type Actor, authorize } from './rbac';
 import { forbidden, notFound, badRequest } from './errors';
 import { formatOpportunityId, slugWithSuffix } from './id';
 import { nextOpportunitySerial } from '@researchtrics/db';
+import type { OpportunityProvider, OpportunityQuery } from './opportunity-sources';
+import { logger } from './logger';
 
 /**
  * Research opportunities (Phase 13, Spec §20, §29, §57).
@@ -157,6 +159,76 @@ export async function expireOpportunities(
     data: { status: 'closed' },
   });
   return { closed: res.count };
+}
+
+// ---------- Ingestion (§20, §85) ----------
+
+export interface IngestResult {
+  source: string;
+  fetched: number;
+  created: number;
+  updated: number;
+}
+
+/**
+ * Ingest opportunities from a legitimate source provider (Spec §20). Idempotent:
+ * listings are deduped on `(source, sourceUrl)` so re-runs update in place rather
+ * than duplicate. Provenance is stamped (`import:<provider>` + sourceUrl), and a
+ * provider only ever touches its OWN imported records — manual listings and other
+ * sources are never overwritten. Ingested rows are system-owned (no poster) and
+ * published as `open`; the hourly expiry sweep closes them once past deadline.
+ */
+export async function ingestOpportunities(
+  provider: OpportunityProvider,
+  query: OpportunityQuery = {},
+  client: PrismaClient = prisma,
+): Promise<IngestResult> {
+  const source = `import:${provider.name}`;
+  const items = await provider.fetchOpportunities(query);
+  let created = 0;
+  let updated = 0;
+
+  for (const item of items) {
+    const sourceUrl = item.sourceUrl ?? item.url ?? null;
+    const common = {
+      title: item.title.trim().slice(0, 500),
+      type: item.type,
+      summary: item.summary ?? null,
+      organization: item.organization ?? null,
+      country: item.country ?? null,
+      url: item.url ?? null,
+      opensAt: item.opensAt ?? null,
+      deadline: item.deadline ?? null,
+      source,
+      sourceUrl,
+    };
+
+    // Dedupe within this provider's own records only.
+    const existing = sourceUrl
+      ? await client.opportunity.findFirst({ where: { source, sourceUrl }, select: { id: true } })
+      : null;
+
+    if (existing) {
+      await client.opportunity.update({ where: { id: existing.id }, data: common });
+      updated += 1;
+    } else {
+      const serial = await nextOpportunitySerial(client);
+      await client.opportunity.create({
+        data: {
+          ...common,
+          publicId: formatOpportunityId(serial),
+          slug: slugWithSuffix(common.title, String(serial)),
+          status: 'open',
+          disciplines: [],
+          postedById: null,
+        },
+      });
+      created += 1;
+    }
+  }
+
+  logger.info({ source, fetched: items.length, created, updated }, 'Opportunity ingestion complete');
+  return { source, fetched: items.length, created, updated };
 }
 
 // ---------- Public reads ----------

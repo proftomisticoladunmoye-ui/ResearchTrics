@@ -6,8 +6,11 @@ import {
   runDiscovery,
   createDiscoveryProvider,
   expireOpportunities,
+  ingestOpportunities,
+  createOpportunityProvider,
   type DiscoveryProviderName,
   type DiscoveryQuery,
+  type OpportunitySourceName,
 } from '@researchtrics/core';
 import { QUEUES, defaultJobOptions } from './queues';
 
@@ -92,6 +95,26 @@ opportunityWorker.on('failed', (job, err) =>
   logger.error({ jobId: job?.id, err }, 'Opportunity expiry failed'),
 );
 
+// Opportunity ingestion from legitimate sources (Spec §20). Gated: a real
+// source only runs when OPPORTUNITY_INGEST_SOURCES lists it (terms reviewed).
+const ingestQueue = new Queue(QUEUES.opportunityIngest, { connection, defaultJobOptions });
+const ingestWorker = new Worker(
+  QUEUES.opportunityIngest,
+  async (job: Job<{ source: OpportunitySourceName; keyword?: string; rows?: number }>) => {
+    const { source, keyword, rows } = job.data;
+    const provider = createOpportunityProvider(source, {
+      grantsGov: { baseUrl: process.env.GRANTS_GOV_BASE_URL },
+    });
+    const result = await ingestOpportunities(provider, { keyword, rows });
+    logger.info({ jobId: job.id, ...result }, 'Opportunity ingestion complete');
+    return result;
+  },
+  { connection, concurrency: 1 },
+);
+ingestWorker.on('failed', (job, err) =>
+  logger.error({ jobId: job?.id, err }, 'Opportunity ingestion failed'),
+);
+
 async function bootstrap(): Promise<void> {
   logger.info({ redisUrl: redisUrl.replace(/:[^:@/]*@/, ':****@') }, 'Starting ResearchTrics worker');
   // Enqueue a self-check so the pipeline is exercised on boot.
@@ -103,6 +126,23 @@ async function bootstrap(): Promise<void> {
   await opportunityQueue
     .add('sweep', {}, { repeat: { every: 60 * 60 * 1000 }, jobId: 'opportunity-expire-hourly' })
     .catch((err) => logger.warn({ err }, 'Could not schedule opportunity expiry'));
+
+  // Schedule ingestion only for sources explicitly enabled (terms reviewed),
+  // e.g. OPPORTUNITY_INGEST_SOURCES="grants_gov". Runs daily per source.
+  const enabled = (process.env.OPPORTUNITY_INGEST_SOURCES ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean) as OpportunitySourceName[];
+  for (const source of enabled) {
+    await ingestQueue
+      .add(
+        'ingest',
+        { source, rows: 100 },
+        { repeat: { every: 24 * 60 * 60 * 1000 }, jobId: `opportunity-ingest-${source}` },
+      )
+      .catch((err) => logger.warn({ err, source }, 'Could not schedule opportunity ingestion'));
+    logger.info({ source }, 'Opportunity ingestion scheduled');
+  }
 }
 
 async function shutdown(signal: string): Promise<void> {
@@ -111,8 +151,10 @@ async function shutdown(signal: string): Promise<void> {
   await ojsWorker.close();
   await discoveryWorker.close();
   await opportunityWorker.close();
+  await ingestWorker.close();
   await healthQueue.close();
   await opportunityQueue.close();
+  await ingestQueue.close();
   await connection.quit();
   process.exit(0);
 }

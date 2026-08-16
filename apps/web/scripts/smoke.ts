@@ -636,6 +636,26 @@ async function main() {
       !!pastAfter && pastAfter.publicId === pastOpp.publicId,
     );
 
+    console.log('\nOpportunity ingestion: provider abstraction + idempotent upsert (§20)');
+    const oppProvider = core.createOpportunityProvider('fixture');
+    const ingest1 = await core.ingestOpportunities(oppProvider);
+    check(
+      'ingest creates provenance-stamped listings from a source provider (§20)',
+      ingest1.created >= 1 && ingest1.source === 'import:fixture',
+      `created=${ingest1.created} source=${ingest1.source}`,
+    );
+    const ingest2 = await core.ingestOpportunities(oppProvider);
+    check(
+      'ingest is idempotent — re-run updates in place, no duplicates',
+      ingest2.created === 0 && ingest2.updated === ingest1.created,
+      `created=${ingest2.created} updated=${ingest2.updated}`,
+    );
+    const grantsGovMapped = core.mapGrantsGov({ id: 99, title: 'NSF Grant', closeDate: '06/30/2027', agencyName: 'NSF' });
+    check(
+      'Grants.gov mapper normalizes a hit with provenance (offline)',
+      grantsGovMapped?.type === 'grant' && grantsGovMapped?.country === 'US' && !!grantsGovMapped?.sourceUrl,
+    );
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

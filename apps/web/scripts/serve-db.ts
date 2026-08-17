@@ -4,7 +4,7 @@
  * stays alive so `next start`/`next dev` can serve against it.
  * Run in the background; stop with Ctrl-C.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -13,7 +13,11 @@ import pg from 'pg';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '..', '..', '..');
-const migrationPath = join(repoRoot, 'packages', 'db', 'prisma', 'migrations', '00000000000000_init', 'migration.sql');
+const migrationsDir = join(repoRoot, 'packages', 'db', 'prisma', 'migrations');
+const migrationFiles = readdirSync(migrationsDir)
+  .filter((d) => /^\d/.test(d))
+  .sort()
+  .map((d) => join(migrationsDir, d, 'migration.sql'));
 
 const PORT = Number(process.env.DEV_PG_PORT ?? 55433);
 const DB = 'researchtrics';
@@ -49,7 +53,9 @@ async function main() {
   await server.createDatabase(DB).catch(() => undefined);
 
   if (!(await tableExists())) {
-    const sql = readFileSync(migrationPath, 'utf8').replace(/CREATE EXTENSION IF NOT EXISTS pg_trgm;\n?/g, '');
+    const sql = migrationFiles
+      .map((p) => readFileSync(p, 'utf8').replace(/CREATE EXTENSION IF NOT EXISTS pg_trgm;\n?/g, ''))
+      .join('\n');
     const c = new pg.Client({ host: 'localhost', port: PORT, user: USER, password: PASS, database: DB });
     await c.connect();
     await c.query(sql);

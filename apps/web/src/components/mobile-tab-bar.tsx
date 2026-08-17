@@ -40,6 +40,17 @@ const TABS: Array<{ href: string; label: string; icon: ReactNode; match: (p: str
     ),
   },
   {
+    href: '/notifications',
+    label: 'Alerts',
+    match: (p) => p.startsWith('/notifications'),
+    icon: (
+      <>
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+      </>
+    ),
+  },
+  {
     href: '/dashboard',
     label: 'Profile',
     match: (p) => p.startsWith('/dashboard'),

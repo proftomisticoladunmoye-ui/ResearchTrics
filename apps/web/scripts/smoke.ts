@@ -4,7 +4,7 @@
  * stack: identity, outputs, publication import + dedup, RVM, search, and the
  * Google Scholar checker. Run: `pnpm --filter @researchtrics/web smoke`.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -13,7 +13,15 @@ import pg from 'pg';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '..', '..', '..');
-const migrationPath = join(repoRoot, 'packages', 'db', 'prisma', 'migrations', '00000000000000_init', 'migration.sql');
+const migrationsDir = join(repoRoot, 'packages', 'db', 'prisma', 'migrations');
+
+/** All committed migration SQL files, in apply order. */
+function allMigrations(): string[] {
+  return readdirSync(migrationsDir)
+    .filter((d) => /^\d/.test(d))
+    .sort()
+    .map((d) => join(migrationsDir, d, 'migration.sql'));
+}
 
 const PORT = 55432;
 const DB = 'researchtrics';
@@ -49,13 +57,12 @@ async function main() {
 
   // Apply the committed migration (strip pg_trgm — contrib may be absent in the
   // embedded build; not needed for these runtime queries).
-  const migrationSql = readFileSync(migrationPath, 'utf8').replace(
-    /CREATE EXTENSION IF NOT EXISTS pg_trgm;\n?/g,
-    '',
-  );
   const client = new pg.Client({ host: 'localhost', port: PORT, user: USER, password: PASS, database: DB });
   await client.connect();
-  await client.query(migrationSql);
+  for (const path of allMigrations()) {
+    const sql = readFileSync(path, 'utf8').replace(/CREATE EXTENSION IF NOT EXISTS pg_trgm;\n?/g, '');
+    await client.query(sql);
+  }
   await client.end();
   console.log('Migration applied.\n');
 
@@ -763,6 +770,35 @@ async function main() {
       'affiliation can be removed',
       !afterRemove?.affiliations.some((a) => a.institution.name === 'Makerere University'),
     );
+
+    console.log('\nEngagement notifications: read/recommend + country, throttled (§41)');
+    // Link a publication to reg's researcher, then notify an engagement.
+    const notifPub = await core.createManualPublication(reg.researcher.id, reg.researcher.displayName, {
+      title: 'A Paper People Will Read',
+      outputType: 'journal_article',
+    });
+    const n1 = await core.notifyEngagement({
+      publicationId: notifPub.publicationId,
+      type: 'publication_read',
+      country: 'Germany',
+    });
+    check('read notification created for the author with country (§41)', n1.created === 1);
+    // Throttled — an identical read within the window does not re-notify.
+    const n2 = await core.notifyEngagement({ publicationId: notifPub.publicationId, type: 'publication_read', country: 'Germany' });
+    check('duplicate read within window is throttled', n2.created === 0);
+    // A recommend is a different type — notifies.
+    const n3 = await core.notifyEngagement({ publicationId: notifPub.publicationId, type: 'publication_recommend', country: 'Kenya' });
+    check('a different engagement type notifies', n3.created === 1);
+    // The author is never notified of their OWN action.
+    const n4 = await core.notifyEngagement({ publicationId: notifPub.publicationId, type: 'publication_download', excludeResearcherId: reg.researcher.id });
+    check('author is not notified of their own action', n4.created === 0);
+
+    const unread = await core.countUnreadNotifications(reg.researcher.id);
+    check('unread count reflects notifications', unread >= 2, `unread=${unread}`);
+    const list = await core.listNotifications(reg.researcher.id);
+    check('notifications describe what + where, no personal data', list.some((n) => n.message.includes('Germany') && n.message.includes('read')));
+    const marked = await core.markNotificationsRead(reg.researcher.id);
+    check('mark-read clears unread', marked >= 2 && (await core.countUnreadNotifications(reg.researcher.id)) === 0);
 
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);

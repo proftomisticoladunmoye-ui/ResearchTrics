@@ -4,6 +4,9 @@ import { notFound } from 'next/navigation';
 import { getPublicationBySlug, getEntityMetrics, CITATION_FORMATS, type CitationFormat } from '@researchtrics/core';
 import { Card, Badge, DoiBadge, OpenAccessBadge, Button } from '@researchtrics/ui';
 import { track } from '@/lib/track';
+import { notifyEngagementFromRequest } from '@/lib/notify';
+import { getCurrentUser } from '@/lib/current-user';
+import { RecommendButton } from '@/components/recommend-button';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -75,6 +78,9 @@ export default async function PublicationPage({
   if (!p) notFound();
 
   await track('publication_view', 'publication', p.id);
+  // Tell the authors their work was read (bot-filtered, throttled, country-only).
+  const viewer = await getCurrentUser();
+  await notifyEngagementFromRequest(p.id, 'publication_read', viewer?.researcher?.id);
   const metrics = await getEntityMetrics('publication', p.id);
 
   const doi = p.identifiers.find((i) => i.scheme === 'doi')?.value;
@@ -143,6 +149,7 @@ export default async function PublicationPage({
             <a href={`https://doi.org/${doi}`} target="_blank" rel="noopener noreferrer">View at publisher</a>
           </Button>
         ) : null}
+        <RecommendButton slug={p.slug} />
         {pdfUrlFor(p, appUrl) ? (
           <Button asChild size="sm">
             <a href={pdfUrlFor(p, appUrl)} target="_blank" rel="noopener noreferrer">PDF</a>

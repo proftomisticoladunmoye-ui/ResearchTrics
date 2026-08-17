@@ -425,6 +425,7 @@ model Researcher {
   discoverySources       ResearcherSource[]
   claimInvitations       ClaimInvitation[]
   publicationClaims      ResearcherPublicationClaim[]
+  notifications          Notification[]               @relation("ResearcherNotifications")
 
   @@index([familyName])
   @@index([profileStatus])
@@ -668,6 +669,7 @@ model Publication {
   projectLinks   ProjectPublication[]
   researcherClaims ResearcherPublicationClaim[]
   unifiedRecord    UnifiedWorkRecord?
+  notifications    Notification[]
 
   @@index([publishedYear])
   @@index([journalId])
@@ -1484,4 +1486,32 @@ model AuditLog {
   @@index([actorId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+/// Engagement notifications (§41): a researcher is told when their work is read,
+/// downloaded, or recommended — with a coarse "from where" (country only; never
+/// a reader IP), consistent with the privacy policy.
+enum NotificationType {
+  publication_read
+  publication_download
+  publication_recommend
+  citation
+}
+
+model Notification {
+  id            String           @id @default(uuid())
+  recipientId   String           @map("recipient_id")
+  type          NotificationType
+  publicationId String?          @map("publication_id")
+  actorLabel    String?          @map("actor_label") // e.g. "A reader" or a researcher name
+  country       String? // ISO country name/code — coarse "from where"
+  readAt        DateTime?        @map("read_at")
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  recipient   Researcher   @relation("ResearcherNotifications", fields: [recipientId], references: [id], onDelete: Cascade)
+  publication Publication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, readAt])
+  @@index([createdAt])
+  @@map("notifications")
 }

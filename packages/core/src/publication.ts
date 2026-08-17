@@ -138,6 +138,43 @@ export async function createManualPublication(
   return { status: 'created', publicationId: pub.id, slug };
 }
 
+/**
+ * Ensure a researcher is linked as an author of a publication (§15, §58). Prefers
+ * matching an existing authorship by ORCID, then by name; if none matches, adds a
+ * lower-confidence authorship (the researcher asserted ownership, e.g. by
+ * importing their own DOI). Idempotent — never double-links.
+ */
+export async function linkResearcherToPublication(
+  publicationId: string,
+  researcher: { id: string; displayName: string; orcid?: string | undefined },
+  client: PrismaClient = prisma,
+): Promise<void> {
+  const already = await client.publicationAuthor.findFirst({
+    where: { publicationId, researcherId: researcher.id },
+    select: { id: true },
+  });
+  if (already) return;
+
+  const or: Array<Record<string, string>> = [{ rawName: researcher.displayName }];
+  if (researcher.orcid) or.push({ orcid: researcher.orcid });
+  const updated = await client.publicationAuthor.updateMany({
+    where: { publicationId, researcherId: null, OR: or },
+    data: { researcherId: researcher.id, matchConfidence: researcher.orcid ? 0.95 : 0.7 },
+  });
+  if (updated.count === 0) {
+    const count = await client.publicationAuthor.count({ where: { publicationId } });
+    await client.publicationAuthor.create({
+      data: {
+        publicationId,
+        researcherId: researcher.id,
+        authorOrder: count,
+        rawName: researcher.displayName,
+        matchConfidence: 0.5,
+      },
+    });
+  }
+}
+
 /** Find an existing publication id by DOI, if any. */
 export async function findPublicationByDoi(
   doi: string,

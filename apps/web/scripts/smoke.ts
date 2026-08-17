@@ -656,6 +656,32 @@ async function main() {
       grantsGovMapped?.type === 'grant' && grantsGovMapped?.country === 'US' && !!grantsGovMapped?.sourceUrl,
     );
 
+    console.log('\nDOI import links the importer as author (§15 fix)');
+    // A publication that exists but is not linked to reg's researcher…
+    const orphan = await core.createPublicationFromNormalized({
+      title: 'An Imported Paper With No Author Link',
+      doi: '10.9/imported.1',
+      authors: [{ rawName: 'Some Other Author' }],
+    });
+    let orphanLinked = await prisma.publicationAuthor.count({
+      where: { publicationId: orphan.publicationId, researcherId: reg.researcher.id },
+    });
+    check('imported paper starts unlinked to the importer', orphanLinked === 0);
+    await core.linkResearcherToPublication(orphan.publicationId, {
+      id: reg.researcher.id,
+      displayName: reg.researcher.displayName,
+    });
+    orphanLinked = await prisma.publicationAuthor.count({
+      where: { publicationId: orphan.publicationId, researcherId: reg.researcher.id },
+    });
+    check('linkResearcherToPublication associates the importer (shows in My publications)', orphanLinked === 1);
+    // Idempotent — no double link.
+    await core.linkResearcherToPublication(orphan.publicationId, { id: reg.researcher.id, displayName: reg.researcher.displayName });
+    const afterTwice = await prisma.publicationAuthor.count({
+      where: { publicationId: orphan.publicationId, researcherId: reg.researcher.id },
+    });
+    check('linking is idempotent (no duplicate authorship)', afterTwice === 1);
+
     console.log('\nProfile robustness: photo + manual publication (§9/§11)');
     await core.updateProfile(reg.researcher.id, { photoUrl: 'https://cdn.example.org/x/photo.png' }, reg.user.id);
     const withPhoto = await core.getResearcherBySlug(reg.researcher.slug);

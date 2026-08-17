@@ -24,7 +24,10 @@ export async function POST(req: NextRequest) {
     await enforceRateLimit('importDoi', `user:${user.researcher.id}`);
 
     try {
-      const result = await importPublicationByDoi(parsed.data.doi);
+      const result = await importPublicationByDoi(parsed.data.doi, {
+        id: user.researcher.id,
+        displayName: user.researcher.displayName,
+      });
       return ok(result);
     } catch (err) {
       if (err instanceof NotFoundError) {

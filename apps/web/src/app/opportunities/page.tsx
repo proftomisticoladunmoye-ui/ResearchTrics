@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { listOpportunities } from '@researchtrics/core';
+import { listOpportunities, listOpenOpportunityTypes } from '@researchtrics/core';
 import type { OpportunityType } from '@researchtrics/db';
 import { Card, Badge } from '@researchtrics/ui';
 import { TYPE_LABELS } from '@/lib/opportunity-labels';
@@ -36,7 +36,13 @@ export default async function OpportunitiesPage({
 }) {
   const sp = await searchParams;
   const type = sp.type as OpportunityType | undefined;
-  const { items, total } = await listOpportunities({ query: sp.q, type, openOnly: true, take: 50 });
+  const [{ items, total }, openTypes] = await Promise.all([
+    listOpportunities({ query: sp.q, type, openOnly: true, take: 50 }),
+    listOpenOpportunityTypes(),
+  ]);
+  const openTypeSet = new Set<OpportunityType>(openTypes);
+  // Only show filters for types that actually have open listings (+ the current one).
+  const visibleFilters = FILTERS.filter((f) => !f.type || openTypeSet.has(f.type) || f.type === type);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
@@ -51,9 +57,9 @@ export default async function OpportunitiesPage({
         <span className="text-sm text-rt-muted">{total} open</span>
       </div>
 
-      {/* Type filter chips (jobs surfaced explicitly) */}
+      {/* Type filter chips — only types that currently have open listings */}
       <div className="mt-5 flex flex-wrap gap-2">
-        {FILTERS.map((f) => {
+        {visibleFilters.map((f) => {
           const active = (f.type ?? undefined) === type;
           const params = new URLSearchParams();
           if (f.type) params.set('type', f.type);

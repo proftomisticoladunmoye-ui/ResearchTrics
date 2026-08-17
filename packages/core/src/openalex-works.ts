@@ -6,6 +6,7 @@ import {
 } from '@researchtrics/db';
 import {
   createPublicationFromNormalized,
+  linkResearcherToPublication,
   type CreatePublicationInput,
   type NormalizedAuthorInput,
 } from './publication';
@@ -136,32 +137,6 @@ export async function fetchOpenAlexWorksForAuthor(
   return json.results ?? [];
 }
 
-async function linkResearcherAuthor(
-  client: PrismaClient,
-  publicationId: string,
-  researcher: { id: string; displayName: string; orcid?: string | undefined },
-): Promise<void> {
-  const or: Array<Record<string, string>> = [{ rawName: researcher.displayName }];
-  if (researcher.orcid) or.push({ orcid: researcher.orcid });
-  const updated = await client.publicationAuthor.updateMany({
-    where: { publicationId, researcherId: null, OR: or },
-    data: { researcherId: researcher.id, matchConfidence: researcher.orcid ? 0.95 : 0.7 },
-  });
-  if (updated.count === 0) {
-    // No authorship matched by name/orcid — attach a link so it shows on the profile.
-    const count = await client.publicationAuthor.count({ where: { publicationId } });
-    await client.publicationAuthor.create({
-      data: {
-        publicationId,
-        researcherId: researcher.id,
-        authorOrder: count,
-        rawName: researcher.displayName,
-        matchConfidence: 0.6,
-      },
-    });
-  }
-}
-
 export interface ResearcherWorksResult {
   fetched: number;
   created: number;
@@ -183,7 +158,7 @@ export async function ingestResearcherWorks(
     const res = await createPublicationFromNormalized(input, client);
     if (res.status === 'created') created += 1;
     else exists += 1;
-    await linkResearcherAuthor(client, res.publicationId, researcher);
+    await linkResearcherToPublication(res.publicationId, researcher, client);
   }
   return { fetched: works.length, created, exists };
 }

@@ -231,6 +231,21 @@ export async function ingestOpportunities(
   return { source, fetched: items.length, created, updated };
 }
 
+/** Opportunity types that currently have at least one open, in-date listing. */
+export async function listOpenOpportunityTypes(
+  client: PrismaClient = prisma,
+): Promise<OpportunityType[]> {
+  const rows = await client.opportunity.groupBy({
+    by: ['type'],
+    where: {
+      deletedAt: null,
+      status: 'open',
+      OR: [{ deadline: null }, { deadline: { gte: new Date() } }],
+    },
+  });
+  return rows.map((r) => r.type);
+}
+
 // ---------- Public reads ----------
 
 const listSelect = {

@@ -2,6 +2,7 @@ import {
   assertValidDoi,
   findPublicationByDoi,
   createPublicationFromNormalized,
+  linkResearcherToPublication,
   logger,
   type CreatePublicationInput,
 } from '@researchtrics/core';
@@ -16,11 +17,16 @@ import type { NormalizedPublication } from '@researchtrics/integration-shared';
  */
 export async function importPublicationByDoi(
   doiInput: string,
+  linkResearcher?: { id: string; displayName: string; orcid?: string | undefined },
 ): Promise<{ status: 'created' | 'exists'; slug: string }> {
   const doi = assertValidDoi(doiInput);
 
   const existing = await findPublicationByDoi(doi);
-  if (existing) return { status: 'exists', slug: existing.slug };
+  if (existing) {
+    // Already in the graph — still associate the importing researcher with it.
+    if (linkResearcher) await linkResearcherToPublication(existing.id, linkResearcher);
+    return { status: 'exists', slug: existing.slug };
+  }
 
   // Crossref is authoritative; failure here is fatal (we cannot invent metadata).
   const crossref = await crossrefByDoi(doi);
@@ -35,6 +41,8 @@ export async function importPublicationByDoi(
 
   const input = mergeSources(doi, crossref, openalex);
   const result = await createPublicationFromNormalized(input);
+  // Link the importing researcher so it appears under "My publications" (§15).
+  if (linkResearcher) await linkResearcherToPublication(result.publicationId, linkResearcher);
   return { status: result.status, slug: result.slug };
 }
 

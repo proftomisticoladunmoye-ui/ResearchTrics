@@ -318,6 +318,8 @@ const publicationInclude = {
     orderBy: { authorOrder: 'asc' },
     include: { researcher: { select: { slug: true, displayName: true } } },
   },
+  // Uploaded full text — surfaced as citation_pdf_url for Google Scholar (§11).
+  primaryFile: { select: { storageKey: true, mimeType: true } },
 } satisfies Prisma.PublicationInclude;
 
 export type PublicationDetail = Prisma.PublicationGetPayload<{ include: typeof publicationInclude }>;

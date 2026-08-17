@@ -672,6 +672,10 @@ async function main() {
     check('manual publication is linked to its author (shows on profile)', myPubs >= 1, `authorships=${myPubs}`);
     const loadedManual = await core.getPublicationBySlug(manualPub.slug);
     check('manual publication loads with its type (book)', loadedManual?.outputType === 'book');
+    check(
+      'publication detail carries the file relation for citation_pdf_url (Model A, §11)',
+      loadedManual !== null && loadedManual.primaryFile === null,
+    );
 
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);

@@ -8,6 +8,22 @@ import { track } from '@/lib/track';
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
 /**
+ * A freely-downloadable full-text PDF URL for Google Scholar (§11): the legacy
+ * `pdfUrl`, or the uploaded primary file served from the (Scholar-crawlable)
+ * files route. Only PDFs qualify as full text.
+ */
+function pdfUrlFor(
+  p: { pdfUrl: string | null; primaryFile: { storageKey: string; mimeType: string } | null },
+  base: string,
+): string | undefined {
+  if (p.pdfUrl) return p.pdfUrl;
+  if (p.primaryFile?.mimeType === 'application/pdf') {
+    return `${base}/api/v1/files/${p.primaryFile.storageKey}`;
+  }
+  return undefined;
+}
+
+/**
  * Highwire `citation_*` meta + canonical (Spec §11, §42). Full Google Scholar
  * compliance checker + sitemaps arrive in Phase 5; the per-page metadata that
  * indexing depends on is emitted here.
@@ -37,7 +53,8 @@ export async function generateMetadata({
   if (p.firstPage) citationMeta.citation_firstpage = p.firstPage;
   if (p.lastPage) citationMeta.citation_lastpage = p.lastPage;
   if (doi) citationMeta.citation_doi = doi;
-  if (p.pdfUrl) citationMeta.citation_pdf_url = p.pdfUrl;
+  const pdfHref = pdfUrlFor(p, appUrl);
+  if (pdfHref) citationMeta.citation_pdf_url = pdfHref;
 
   return {
     title: p.title,
@@ -126,9 +143,9 @@ export default async function PublicationPage({
             <a href={`https://doi.org/${doi}`} target="_blank" rel="noopener noreferrer">View at publisher</a>
           </Button>
         ) : null}
-        {p.pdfUrl ? (
+        {pdfUrlFor(p, appUrl) ? (
           <Button asChild size="sm">
-            <a href={p.pdfUrl} target="_blank" rel="noopener noreferrer">PDF</a>
+            <a href={pdfUrlFor(p, appUrl)} target="_blank" rel="noopener noreferrer">PDF</a>
           </Button>
         ) : null}
       </div>

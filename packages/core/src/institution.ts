@@ -1,5 +1,6 @@
 import { prisma, type PrismaClient, type Prisma } from '@researchtrics/db';
 import { slugWithSuffix, slugify } from './id';
+import { badRequest } from './errors';
 
 /**
  * Institution & affiliation services (Spec §7, §26). Affiliations are
@@ -111,4 +112,37 @@ export async function removeAffiliation(
   client: PrismaClient = prisma,
 ): Promise<void> {
   await client.affiliation.deleteMany({ where: { id: affiliationId, researcherId } });
+}
+
+export interface AddResearcherAffiliationInput {
+  researcherId: string;
+  institutionName: string;
+  country?: string | null;
+  role?: Prisma.AffiliationCreateInput['role'];
+  isPrimary?: boolean;
+}
+
+/**
+ * Add an affiliation for a researcher by institution NAME — resolving (or
+ * creating) the canonical institution first, so a researcher can set their
+ * university from the dashboard without knowing an internal id (§7). Newly
+ * self-declared affiliations are unverified until confirmed by the institution.
+ */
+export async function addResearcherAffiliation(
+  input: AddResearcherAffiliationInput,
+  client: PrismaClient = prisma,
+) {
+  const name = input.institutionName.trim();
+  if (name.length < 2) throw badRequest('An institution name is required');
+  const institution = await findOrCreateInstitutionByName(name, { country: input.country }, client);
+  return addAffiliation(
+    {
+      researcherId: input.researcherId,
+      institutionId: institution.id,
+      role: input.role,
+      isPrimary: input.isPrimary ?? false,
+      verified: false,
+    },
+    client,
+  );
 }

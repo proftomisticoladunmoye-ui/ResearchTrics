@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   verifyAffiliation,
   revokeAffiliationVerification,
+  removeAffiliation,
   unauthorized,
   validationError,
 } from '@researchtrics/core';
@@ -35,6 +36,22 @@ export async function POST(
       await revokeAffiliationVerification(user.actor, affiliationId);
     }
     return ok({ affiliationId, verified: parsed.data.verified });
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Remove one of the current researcher's own affiliations (§7). */
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ affiliationId: string }> },
+) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || !user.researcher) throw unauthorized();
+    const { affiliationId } = await params;
+    await removeAffiliation(affiliationId, user.researcher.id);
+    return ok({ removed: true });
   } catch (err) {
     return fail(err);
   }

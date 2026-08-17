@@ -742,6 +742,28 @@ async function main() {
         linkedPub.citationCounts.some((c) => c.source === 'openalex' && c.count === 7),
     );
 
+    console.log('\nAffiliation control: add by institution name (§7)');
+    const aff = await core.addResearcherAffiliation({
+      researcherId: reg.researcher.id,
+      institutionName: 'Makerere University',
+      country: 'Uganda',
+      role: 'faculty',
+      isPrimary: true,
+    });
+    check('affiliation added + institution resolved/created by name (§7)', !!aff.id && !!aff.institutionId);
+    const profileWithAff = await core.getResearcherBySlug(reg.researcher.slug);
+    check(
+      'affiliation shows on profile with institution + primary flag',
+      (profileWithAff?.affiliations.length ?? 0) >= 1 &&
+        profileWithAff!.affiliations.some((a) => a.institution.name === 'Makerere University' && a.isPrimary),
+    );
+    await core.removeAffiliation(aff.id, reg.researcher.id);
+    const afterRemove = await core.getResearcherBySlug(reg.researcher.slug);
+    check(
+      'affiliation can be removed',
+      !afterRemove?.affiliations.some((a) => a.institution.name === 'Makerere University'),
+    );
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

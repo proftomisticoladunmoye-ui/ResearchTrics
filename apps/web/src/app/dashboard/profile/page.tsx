@@ -6,6 +6,7 @@ import { Card, Alert, Button, Badge, OrcidBadge, VerificationBadge } from '@rese
 import { getCurrentUser } from '@/lib/current-user';
 import { ProfileEditForm } from '@/components/profile-edit-form';
 import { PhotoUpload } from '@/components/photo-upload';
+import { AffiliationManager } from '@/components/affiliation-manager';
 
 export const metadata: Metadata = {
   title: 'Edit profile',
@@ -89,6 +90,25 @@ export default async function DashboardProfilePage({
         <h2 className="text-base font-semibold text-rt-text">Profile photo</h2>
         <div className="mt-4">
           <PhotoUpload name={researcher.displayName} currentUrl={researcher.photoUrl} />
+        </div>
+      </Card>
+
+      <Card className="mt-6 p-5">
+        <h2 className="text-base font-semibold text-rt-text">Affiliations</h2>
+        <p className="mt-1 text-xs text-rt-muted">
+          Your university or research institution. This appears on your public profile.
+        </p>
+        <div className="mt-4">
+          <AffiliationManager
+            affiliations={researcher.affiliations.map((a) => ({
+              id: a.id,
+              institution: a.institution.name,
+              country: a.institution.country,
+              role: a.role,
+              isPrimary: a.isPrimary,
+              verified: a.verified,
+            }))}
+          />
         </div>
       </Card>
 

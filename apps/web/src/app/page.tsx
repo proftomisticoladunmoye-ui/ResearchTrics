@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { Button, Card, Badge } from '@researchtrics/ui';
 import { NetworkHero } from '@/components/network-hero';
+import { getCurrentUser } from '@/lib/current-user';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -76,7 +78,12 @@ const RVM_DIMENSIONS = [
   'Digital Presence',
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Logged-in users get their app home (dashboard); anonymous visitors + crawlers
+  // see the marketing landing (keeps the homepage crawlable for SEO).
+  const user = await getCurrentUser();
+  if (user) redirect('/dashboard');
+
   return (
     <div>
       <script

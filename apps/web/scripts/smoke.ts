@@ -677,6 +677,45 @@ async function main() {
       loadedManual !== null && loadedManual.primaryFile === null,
     );
 
+    console.log('\nFederation-first: ingest a discovered researcher\'s OpenAlex works (§5/§25)');
+    const fakeOaFetch = (async () => ({
+      ok: true,
+      json: async () => ({
+        results: [
+          {
+            id: 'https://openalex.org/W5001',
+            doi: 'https://doi.org/10.5555/discovered.1',
+            title: 'Discovered Work on Malaria Vectors',
+            type: 'article',
+            publication_year: 2024,
+            cited_by_count: 7,
+            open_access: { is_oa: true, oa_url: 'https://example.org/w5001.pdf' },
+            primary_location: { source: { display_name: 'PLOS ONE' } },
+            authorships: [{ author: { display_name: reg.researcher.displayName } }],
+          },
+        ],
+      }),
+    })) as unknown as typeof fetch;
+    const worksResult = await core.ingestResearcherWorks(
+      { id: reg.researcher.id, displayName: reg.researcher.displayName, openalexAuthorId: 'A999' },
+      { fetchImpl: fakeOaFetch },
+    );
+    check(
+      'discovered researcher works are ingested as publications (§5)',
+      worksResult.created === 1 && worksResult.fetched === 1,
+      `created=${worksResult.created} exists=${worksResult.exists}`,
+    );
+    const linkedPub = await prisma.publication.findFirst({
+      where: { title: 'Discovered Work on Malaria Vectors' },
+      include: { authors: true, citationCounts: true },
+    });
+    check(
+      'ingested work links back to the researcher + carries citations (§5/§30)',
+      !!linkedPub &&
+        linkedPub.authors.some((a) => a.researcherId === reg.researcher.id) &&
+        linkedPub.citationCounts.some((c) => c.source === 'openalex' && c.count === 7),
+    );
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

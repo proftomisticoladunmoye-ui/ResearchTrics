@@ -30,6 +30,7 @@ export * from './opportunities';
 export * from './opportunity-sources';
 export * from './graph';
 export * from './discovery';
+export * from './openalex-works';
 export * from './claiming';
 export * from './invitations';
 export * from './review';

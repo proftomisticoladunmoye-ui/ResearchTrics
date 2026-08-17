@@ -18,6 +18,7 @@ export const QUEUES = {
   notification: 'notification.dispatch',
   opportunityExpire: 'opportunity.expire',
   opportunityIngest: 'opportunity.ingest',
+  discoveryIngest: 'discovery.ingest',
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];

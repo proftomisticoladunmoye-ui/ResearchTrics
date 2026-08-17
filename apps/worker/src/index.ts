@@ -4,6 +4,7 @@ import pino from 'pino';
 import { syncOjsSource } from '@researchtrics/integration-ojs';
 import {
   runDiscovery,
+  runDiscoveryWithWorks,
   createDiscoveryProvider,
   expireOpportunities,
   ingestOpportunities,
@@ -12,6 +13,21 @@ import {
   type DiscoveryQuery,
   type OpportunitySourceName,
 } from '@researchtrics/core';
+
+/** Parse a DISCOVERY_SEED string like "country:UG" / "ror:https://…" / "topic:malaria". */
+function parseSeed(seed: string): DiscoveryQuery {
+  const i = seed.indexOf(':');
+  const key = (i === -1 ? seed : seed.slice(0, i)).trim().toLowerCase();
+  const value = (i === -1 ? '' : seed.slice(i + 1)).trim();
+  const limit = Number(process.env.DISCOVERY_LIMIT ?? 25);
+  const q: DiscoveryQuery = { limit } as DiscoveryQuery;
+  if (key === 'country') (q as Record<string, unknown>).country = value;
+  else if (key === 'ror') (q as Record<string, unknown>).rorId = value;
+  else if (key === 'orcid') (q as Record<string, unknown>).orcid = value;
+  else if (key === 'topic') (q as Record<string, unknown>).topic = value;
+  else if (key === 'institution') (q as Record<string, unknown>).institution = value;
+  return q;
+}
 import { QUEUES, defaultJobOptions } from './queues';
 
 const logger = pino({
@@ -116,6 +132,32 @@ ingestWorker.on('failed', (job, err) =>
   logger.error({ jobId: job?.id, err }, 'Opportunity ingestion failed'),
 );
 
+// Federation-first population: discover researchers from OpenAlex for a
+// configured seed, then enrich each with their works. Gated on DISCOVERY_SEED.
+const discoveryIngestQueue = new Queue(QUEUES.discoveryIngest, { connection, defaultJobOptions });
+const discoveryIngestWorker = new Worker(
+  QUEUES.discoveryIngest,
+  async (job: Job<{ seed: string }>) => {
+    const query = parseSeed(job.data.seed);
+    const provider = createDiscoveryProvider('openalex', {
+      openalex: { mailto: process.env.OPENALEX_MAILTO },
+    });
+    const summary = await runDiscoveryWithWorks(
+      { provider, query, actorId: null },
+      { worksPerResearcher: Number(process.env.DISCOVERY_WORKS ?? 25), mailto: process.env.OPENALEX_MAILTO },
+    );
+    logger.info(
+      { jobId: job.id, discovered: summary.discovered, created: summary.created, enriched: summary.researchersEnriched, works: summary.worksCreated },
+      'Discovery ingestion complete',
+    );
+    return summary;
+  },
+  { connection, concurrency: 1 },
+);
+discoveryIngestWorker.on('failed', (job, err) =>
+  logger.error({ jobId: job?.id, err }, 'Discovery ingestion failed'),
+);
+
 async function bootstrap(): Promise<void> {
   logger.info({ redisUrl: redisUrl.replace(/:[^:@/]*@/, ':****@') }, 'Starting ResearchTrics worker');
   // Enqueue a self-check so the pipeline is exercised on boot.
@@ -148,6 +190,16 @@ async function bootstrap(): Promise<void> {
       .catch((err) => logger.warn({ err, source }, 'Could not schedule opportunity ingestion'));
     logger.info({ source }, 'Opportunity ingestion scheduled (immediate + daily)');
   }
+
+  // Federation-first discovery: run now + daily for the configured seed.
+  const seed = process.env.DISCOVERY_SEED?.trim();
+  if (seed) {
+    await discoveryIngestQueue.add('discover', { seed }).catch(() => {});
+    await discoveryIngestQueue
+      .add('discover', { seed }, { repeat: { every: 24 * 60 * 60 * 1000 }, jobId: 'discovery-ingest-daily' })
+      .catch((err) => logger.warn({ err }, 'Could not schedule discovery ingestion'));
+    logger.info({ seed }, 'Discovery ingestion scheduled (immediate + daily)');
+  }
 }
 
 async function shutdown(signal: string): Promise<void> {
@@ -157,9 +209,11 @@ async function shutdown(signal: string): Promise<void> {
   await discoveryWorker.close();
   await opportunityWorker.close();
   await ingestWorker.close();
+  await discoveryIngestWorker.close();
   await healthQueue.close();
   await opportunityQueue.close();
   await ingestQueue.close();
+  await discoveryIngestQueue.close();
   await connection.quit();
   process.exit(0);
 }

@@ -800,6 +800,29 @@ async function main() {
     const marked = await core.markNotificationsRead(reg.researcher.id);
     check('mark-read clears unread', marked >= 2 && (await core.countUnreadNotifications(reg.researcher.id)) === 0);
 
+    console.log('\nEmail digests: batched engagement summary to verified users (§41)');
+    // reg's user is email-verified in this smoke? mark verified to receive digests.
+    await prisma.user.update({ where: { id: reg.user.id }, data: { emailVerified: true } });
+    // Capture emails via a stub provider.
+    const sentEmails: Array<{ to: string; subject: string; text: string }> = [];
+    core.setEmailProvider({ send: async (m) => { sentEmails.push({ to: m.to, subject: m.subject, text: m.text }); } });
+    const digest = await core.buildEngagementDigest(reg.researcher.id, 7);
+    check(
+      'digest aggregates the researcher\'s recent engagement (§41)',
+      !!digest && digest.total >= 1 && digest.email === reg.user.email,
+      `total=${digest?.total}`,
+    );
+    const sendResult = await core.sendEngagementDigests(7, 'https://www.researchtrics.com');
+    check(
+      'digest email sent to the verified author (batched, country-level)',
+      sendResult.sent >= 1 && sentEmails.some((e) => e.to === reg.user.email && /read|download|recommend|interaction/i.test(e.text)),
+      `sent=${sendResult.sent}`,
+    );
+    check(
+      'digest contains no reader IPs/identities (privacy)',
+      sentEmails.every((e) => !/\d+\.\d+\.\d+\.\d+/.test(e.text)),
+    );
+
     console.log('\nProfile read');
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);

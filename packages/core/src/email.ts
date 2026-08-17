@@ -37,6 +37,46 @@ export function getEmailProvider(): EmailProvider {
   return provider;
 }
 
+export interface ResendConfig {
+  apiKey: string;
+  from: string;
+  baseUrl?: string;
+  fetchImpl?: typeof fetch;
+}
+
+/** Real transport via Resend's HTTP API (a common, simple provider). */
+export class ResendEmailProvider implements EmailProvider {
+  constructor(private readonly config: ResendConfig) {}
+  async send(message: EmailMessage): Promise<void> {
+    const res = await (this.config.fetchImpl ?? fetch)(
+      `${(this.config.baseUrl ?? 'https://api.resend.com').replace(/\/$/, '')}/emails`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${this.config.apiKey}` },
+        body: JSON.stringify({
+          from: this.config.from,
+          to: message.to,
+          subject: message.subject,
+          html: message.html,
+          text: message.text,
+        }),
+      },
+    );
+    if (!res.ok) throw new Error(`Resend send failed: ${res.status}`);
+  }
+}
+
+/** Select an email transport from the environment (console by default). */
+export function emailProviderFromEnv(env: NodeJS.ProcessEnv = process.env): EmailProvider {
+  if (env.EMAIL_PROVIDER === 'resend' && env.EMAIL_API_KEY) {
+    return new ResendEmailProvider({
+      apiKey: env.EMAIL_API_KEY,
+      from: env.EMAIL_FROM ?? 'ResearchTrics <no-reply@researchtrics.com>',
+    });
+  }
+  return new ConsoleEmailProvider();
+}
+
 // --- Minimal transactional templates (Spec §40) ---
 
 export function emailVerificationTemplate(verifyUrl: string): Omit<EmailMessage, 'to'> {

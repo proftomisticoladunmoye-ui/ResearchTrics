@@ -9,10 +9,16 @@ import {
   expireOpportunities,
   ingestOpportunities,
   createOpportunityProvider,
+  sendEngagementDigests,
+  emailProviderFromEnv,
+  setEmailProvider,
   type DiscoveryProviderName,
   type DiscoveryQuery,
   type OpportunitySourceName,
 } from '@researchtrics/core';
+
+// Wire the real email transport (Resend when configured, else console).
+setEmailProvider(emailProviderFromEnv());
 
 /** Parse a DISCOVERY_SEED string like "country:UG" / "ror:https://…" / "topic:malaria". */
 function parseSeed(seed: string): DiscoveryQuery {
@@ -158,6 +164,22 @@ discoveryIngestWorker.on('failed', (job, err) =>
   logger.error({ jobId: job?.id, err }, 'Discovery ingestion failed'),
 );
 
+// Weekly engagement email digests (§41). Gated on EMAIL_DIGESTS_ENABLED; needs a
+// real email transport (EMAIL_PROVIDER=resend) to actually deliver.
+const emailDigestQueue = new Queue(QUEUES.emailDigest, { connection, defaultJobOptions });
+const emailDigestWorker = new Worker(
+  QUEUES.emailDigest,
+  async (job: Job) => {
+    const result = await sendEngagementDigests(Number(process.env.EMAIL_DIGEST_DAYS ?? 7));
+    logger.info({ jobId: job.id, ...result }, 'Engagement digests sent');
+    return result;
+  },
+  { connection, concurrency: 1 },
+);
+emailDigestWorker.on('failed', (job, err) =>
+  logger.error({ jobId: job?.id, err }, 'Engagement digest job failed'),
+);
+
 async function bootstrap(): Promise<void> {
   logger.info({ redisUrl: redisUrl.replace(/:[^:@/]*@/, ':****@') }, 'Starting ResearchTrics worker');
   // Enqueue a self-check so the pipeline is exercised on boot.
@@ -205,6 +227,14 @@ async function bootstrap(): Promise<void> {
       .catch((err) => logger.warn({ err, seed }, 'Could not schedule discovery ingestion'));
   }
   if (seeds.length) logger.info({ seeds }, 'Global discovery ingestion scheduled (immediate + daily)');
+
+  // Weekly engagement digests, when enabled.
+  if (process.env.EMAIL_DIGESTS_ENABLED === 'true') {
+    await emailDigestQueue
+      .add('digest', {}, { repeat: { every: 7 * 24 * 60 * 60 * 1000 }, jobId: 'email-digest-weekly' })
+      .catch((err) => logger.warn({ err }, 'Could not schedule email digests'));
+    logger.info('Weekly engagement digests scheduled');
+  }
 }
 
 async function shutdown(signal: string): Promise<void> {
@@ -215,10 +245,12 @@ async function shutdown(signal: string): Promise<void> {
   await opportunityWorker.close();
   await ingestWorker.close();
   await discoveryIngestWorker.close();
+  await emailDigestWorker.close();
   await healthQueue.close();
   await opportunityQueue.close();
   await ingestQueue.close();
   await discoveryIngestQueue.close();
+  await emailDigestQueue.close();
   await connection.quit();
   process.exit(0);
 }

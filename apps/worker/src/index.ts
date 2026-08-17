@@ -191,15 +191,20 @@ async function bootstrap(): Promise<void> {
     logger.info({ source }, 'Opportunity ingestion scheduled (immediate + daily)');
   }
 
-  // Federation-first discovery: run now + daily for the configured seed.
-  const seed = process.env.DISCOVERY_SEED?.trim();
-  if (seed) {
+  // Federation-first discovery: DISCOVERY_SEED is a comma-separated list so the
+  // graph fills GLOBALLY (multiple countries / institutions / topics), each seed
+  // run now + daily. Jobs process serially (concurrency 1), so many seeds are safe.
+  const seeds = (process.env.DISCOVERY_SEED ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const [i, seed] of seeds.entries()) {
     await discoveryIngestQueue.add('discover', { seed }).catch(() => {});
     await discoveryIngestQueue
-      .add('discover', { seed }, { repeat: { every: 24 * 60 * 60 * 1000 }, jobId: 'discovery-ingest-daily' })
-      .catch((err) => logger.warn({ err }, 'Could not schedule discovery ingestion'));
-    logger.info({ seed }, 'Discovery ingestion scheduled (immediate + daily)');
+      .add('discover', { seed }, { repeat: { every: 24 * 60 * 60 * 1000 }, jobId: `discovery-ingest-${i}` })
+      .catch((err) => logger.warn({ err, seed }, 'Could not schedule discovery ingestion'));
   }
+  if (seeds.length) logger.info({ seeds }, 'Global discovery ingestion scheduled (immediate + daily)');
 }
 
 async function shutdown(signal: string): Promise<void> {

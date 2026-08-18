@@ -20,6 +20,7 @@ export const QUEUES = {
   opportunityIngest: 'opportunity.ingest',
   discoveryIngest: 'discovery.ingest',
   emailDigest: 'email.digest',
+  opportunityMatch: 'opportunity.match',
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];

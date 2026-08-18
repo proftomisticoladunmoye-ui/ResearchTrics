@@ -33,7 +33,8 @@ export default async function NotificationsPage() {
     <div className="mx-auto max-w-2xl px-4 py-12">
       <h1 className="text-2xl font-semibold text-rt-text">Notifications</h1>
       <p className="mt-1 text-sm text-rt-muted">
-        When your work is read, downloaded, or recommended — and roughly where from.
+        When your work is read, downloaded, or recommended — roughly where from — and when new
+        opportunities match your interests.
       </p>
 
       <Card className="mt-6 p-0">
@@ -51,8 +52,8 @@ export default async function NotificationsPage() {
                 />
                 <div className="min-w-0">
                   <p className="text-sm text-rt-text">
-                    {n.publicationSlug ? (
-                      <Link href={`/publications/${n.publicationSlug}`} className="hover:underline">
+                    {n.href ? (
+                      <Link href={n.href} className="hover:underline">
                         {n.message}
                       </Link>
                     ) : (

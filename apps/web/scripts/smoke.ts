@@ -810,6 +810,18 @@ async function main() {
     const n4 = await core.notifyEngagement({ publicationId: notifPub.publicationId, type: 'publication_download', excludeResearcherId: reg.researcher.id });
     check('author is not notified of their own action', n4.created === 0);
 
+    // Opportunity match notifications: reg's researcher has a matching interest
+    // for `opp` (psychometrics), so a match notification is created — once only.
+    const m1 = await core.notifyOpportunityMatches({ perResearcher: 10 });
+    check('opportunity matches notified to interested researchers (§41)', m1.created >= 1, `created=${m1.created}`);
+    const m2 = await core.notifyOpportunityMatches({ perResearcher: 10 });
+    check('opportunity match is idempotent (told once)', m2.created === 0, `created=${m2.created}`);
+    const oppList = await core.listNotifications(reg.researcher.id);
+    check(
+      'opportunity match renders as an interest match with a link',
+      oppList.some((n) => n.type === 'opportunity_match' && /matches your interests/.test(n.message) && n.href === `/opportunities/${opp.slug}`),
+    );
+
     const unread = await core.countUnreadNotifications(reg.researcher.id);
     check('unread count reflects notifications', unread >= 2, `unread=${unread}`);
     const list = await core.listNotifications(reg.researcher.id);
@@ -828,6 +840,11 @@ async function main() {
       'digest aggregates the researcher\'s recent engagement (§41)',
       !!digest && digest.total >= 1 && digest.email === reg.user.email,
       `total=${digest?.total}`,
+    );
+    check(
+      'digest folds in matched opportunities',
+      !!digest && digest.opportunities.some((o) => o.slug === opp.slug),
+      `opps=${digest?.opportunities.length}`,
     );
     const sendResult = await core.sendEngagementDigests(7, 'https://www.researchtrics.com');
     check(

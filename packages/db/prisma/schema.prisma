@@ -826,6 +826,7 @@ model Opportunity {
   institution Institution?      @relation(fields: [institutionId], references: [id], onDelete: SetNull)
   postedBy    User?             @relation("OpportunityPoster", fields: [postedById], references: [id], onDelete: SetNull)
   savedBy     OpportunitySave[]
+  notifications Notification[]
 
   @@index([type])
   @@index([status])
@@ -1496,6 +1497,7 @@ enum NotificationType {
   publication_download
   publication_recommend
   citation
+  opportunity_match
 }
 
 model Notification {
@@ -1503,6 +1505,7 @@ model Notification {
   recipientId   String           @map("recipient_id")
   type          NotificationType
   publicationId String?          @map("publication_id")
+  opportunityId String?          @map("opportunity_id")
   actorLabel    String?          @map("actor_label") // e.g. "A reader" or a researcher name
   country       String? // ISO country name/code — coarse "from where"
   readAt        DateTime?        @map("read_at")
@@ -1510,6 +1513,7 @@ model Notification {
 
   recipient   Researcher   @relation("ResearcherNotifications", fields: [recipientId], references: [id], onDelete: Cascade)
   publication Publication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
 
   @@index([recipientId, readAt])
   @@index([createdAt])

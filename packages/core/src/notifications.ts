@@ -66,15 +66,19 @@ export async function notifyEngagement(
 export interface NotificationView {
   id: string;
   type: NotificationType;
+  /** Where this notification links (publication or opportunity). */
+  href: string | null;
   publicationSlug: string | null;
   publicationTitle: string | null;
+  opportunitySlug: string | null;
+  opportunityTitle: string | null;
   country: string | null;
   read: boolean;
   createdAt: Date;
   message: string;
 }
 
-const VERB: Record<NotificationType, string> = {
+const VERB: Partial<Record<NotificationType, string>> = {
   publication_read: 'read',
   publication_download: 'downloaded',
   publication_recommend: 'recommended',
@@ -86,7 +90,14 @@ export function describeNotification(n: {
   type: NotificationType;
   country: string | null;
   publicationTitle: string | null;
+  opportunityTitle?: string | null;
+  opportunityType?: string | null;
 }): string {
+  if (n.type === 'opportunity_match') {
+    const kind = (n.opportunityType ?? 'opportunity').replace(/_/g, ' ');
+    const what = n.opportunityTitle ? `: “${n.opportunityTitle}”` : '';
+    return `A new ${kind} matches your interests${what}.`;
+  }
   const what = n.publicationTitle ? `“${n.publicationTitle}”` : 'your work';
   const where = n.country ? ` from ${n.country}` : '';
   return `Someone ${VERB[n.type] ?? 'engaged with'} ${what}${where}.`;
@@ -101,17 +112,33 @@ export async function listNotifications(
     where: { recipientId },
     orderBy: { createdAt: 'desc' },
     take: opts.take ?? 50,
-    include: { publication: { select: { title: true, slug: true } } },
+    include: {
+      publication: { select: { title: true, slug: true } },
+      opportunity: { select: { title: true, slug: true, type: true } },
+    },
   });
   return rows.map((n) => ({
     id: n.id,
     type: n.type,
+    href: n.opportunity
+      ? `/opportunities/${n.opportunity.slug}`
+      : n.publication
+        ? `/publications/${n.publication.slug}`
+        : null,
     publicationSlug: n.publication?.slug ?? null,
     publicationTitle: n.publication?.title ?? null,
+    opportunitySlug: n.opportunity?.slug ?? null,
+    opportunityTitle: n.opportunity?.title ?? null,
     country: n.country,
     read: n.readAt !== null,
     createdAt: n.createdAt,
-    message: describeNotification({ type: n.type, country: n.country, publicationTitle: n.publication?.title ?? null }),
+    message: describeNotification({
+      type: n.type,
+      country: n.country,
+      publicationTitle: n.publication?.title ?? null,
+      opportunityTitle: n.opportunity?.title ?? null,
+      opportunityType: n.opportunity?.type ?? null,
+    }),
   }));
 }
 

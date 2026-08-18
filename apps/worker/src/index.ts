@@ -8,6 +8,7 @@ import {
   createDiscoveryProvider,
   expireOpportunities,
   ingestOpportunities,
+  notifyOpportunityMatches,
   createOpportunityProvider,
   sendEngagementDigests,
   emailProviderFromEnv,
@@ -181,6 +182,25 @@ emailDigestWorker.on('failed', (job, err) =>
   logger.error({ jobId: job?.id, err }, 'Engagement digest job failed'),
 );
 
+// Opportunity matching notifications (§41): match registered researchers to newly
+// ingested opportunities and notify them (bell + folded into the weekly digest).
+// Always on — it is grounded in the researcher's own interests and idempotent.
+const opportunityMatchQueue = new Queue(QUEUES.opportunityMatch, { connection, defaultJobOptions });
+const opportunityMatchWorker = new Worker(
+  QUEUES.opportunityMatch,
+  async (job: Job) => {
+    const result = await notifyOpportunityMatches({
+      perResearcher: Number(process.env.OPPORTUNITY_MATCH_PER_RESEARCHER ?? 5),
+    });
+    logger.info({ jobId: job.id, ...result }, 'Opportunity match notifications complete');
+    return result;
+  },
+  { connection, concurrency: 1 },
+);
+opportunityMatchWorker.on('failed', (job, err) =>
+  logger.error({ jobId: job?.id, err }, 'Opportunity matching failed'),
+);
+
 async function bootstrap(): Promise<void> {
   logger.info({ redisUrl: redisUrl.replace(/:[^:@/]*@/, ':****@') }, 'Starting ResearchTrics worker');
   // Enqueue a self-check so the pipeline is exercised on boot.
@@ -236,6 +256,14 @@ async function bootstrap(): Promise<void> {
       .catch((err) => logger.warn({ err }, 'Could not schedule email digests'));
     logger.info('Weekly engagement digests scheduled');
   }
+
+  // Opportunity match notifications: run once now (repeatable jobs don't fire
+  // immediately), then daily so new listings reach matched researchers promptly.
+  await opportunityMatchQueue.add('match', {}).catch(() => {});
+  await opportunityMatchQueue
+    .add('match', {}, { repeat: { every: 24 * 60 * 60 * 1000 }, jobId: 'opportunity-match-daily' })
+    .catch((err) => logger.warn({ err }, 'Could not schedule opportunity matching'));
+  logger.info('Opportunity match notifications scheduled (immediate + daily)');
 }
 
 async function shutdown(signal: string): Promise<void> {
@@ -247,11 +275,13 @@ async function shutdown(signal: string): Promise<void> {
   await ingestWorker.close();
   await discoveryIngestWorker.close();
   await emailDigestWorker.close();
+  await opportunityMatchWorker.close();
   await healthQueue.close();
   await opportunityQueue.close();
   await ingestQueue.close();
   await discoveryIngestQueue.close();
   await emailDigestQueue.close();
+  await opportunityMatchQueue.close();
   await connection.quit();
   process.exit(0);
 }

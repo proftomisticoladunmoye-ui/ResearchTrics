@@ -13,6 +13,7 @@ const digest: EngagementDigest = {
   recommends: 1,
   countries: ['Germany', 'Nigeria'],
   topPublications: [{ title: 'On Engines', slug: 'on-engines-1', count: 9 }],
+  opportunities: [],
 };
 
 describe('engagementDigestTemplate', () => {
@@ -35,6 +36,40 @@ describe('engagementDigestTemplate', () => {
     );
     expect(t.html).toContain('&lt;script&gt;');
     expect(t.html).not.toContain('<script>x</script>');
+  });
+
+  it('includes matched opportunities with a humanized type label', () => {
+    const t = engagementDigestTemplate(
+      {
+        ...digest,
+        opportunities: [{ title: 'Marie Curie Fellowship', slug: 'mcf-1', type: 'call_for_papers' }],
+      },
+      'https://x',
+    );
+    expect(t.text).toContain('Marie Curie Fellowship (call for papers)');
+    expect(t.text).toContain('/opportunities');
+    expect(t.html).toContain('Marie Curie Fellowship');
+    expect(t.html).toContain('call for papers');
+  });
+
+  it('leads the subject with opportunities when there is no reader engagement', () => {
+    const t = engagementDigestTemplate(
+      {
+        ...digest,
+        total: 2,
+        reads: 0,
+        downloads: 0,
+        recommends: 0,
+        topPublications: [],
+        opportunities: [
+          { title: 'Grant A', slug: 'a', type: 'grant' },
+          { title: 'Conf B', slug: 'b', type: 'conference' },
+        ],
+      },
+      'https://x',
+    );
+    expect(t.subject).toContain('2 new opportunities match');
+    expect(t.subject).not.toContain('reader');
   });
 });
 

@@ -525,3 +525,47 @@ export async function recommendOpportunities(
 
   return recs.sort((a, b) => b.score - a.score).slice(0, limit);
 }
+
+/**
+ * Notify registered researchers of newly-matched opportunities (§41). For every
+ * researcher with a claimed account and at least one declared interest, compute
+ * their top opportunity matches and create an `opportunity_match` notification
+ * for any match not already notified. Idempotent: a researcher is told about a
+ * given opportunity at most once. Feeds both the bell and the weekly email digest.
+ */
+export async function notifyOpportunityMatches(
+  opts: { perResearcher?: number } = {},
+  client: PrismaClient = prisma,
+): Promise<{ researchers: number; created: number }> {
+  const perResearcher = opts.perResearcher ?? 5;
+  const researchers = await client.researcher.findMany({
+    where: {
+      userId: { not: null },
+      deletedAt: null,
+      interests: { some: {} },
+    },
+    select: { id: true },
+  });
+
+  let created = 0;
+  for (const r of researchers) {
+    const recs = await recommendOpportunities(r.id, perResearcher, client);
+    for (const rec of recs) {
+      const existing = await client.notification.findFirst({
+        where: { recipientId: r.id, opportunityId: rec.id, type: 'opportunity_match' },
+        select: { id: true },
+      });
+      if (existing) continue;
+      await client.notification.create({
+        data: {
+          recipientId: r.id,
+          type: 'opportunity_match',
+          opportunityId: rec.id,
+          actorLabel: 'ResearchTrics',
+        },
+      });
+      created += 1;
+    }
+  }
+  return { researchers: researchers.length, created };
+}

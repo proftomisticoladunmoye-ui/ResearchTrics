@@ -339,6 +339,9 @@ export async function precomputeProfileSummaries(
     where: {
       deletedAt: null,
       profileVisibility: 'public',
+      // Never summarize suppressed (removal-requested) or merged (deduplicated)
+      // profiles — they should carry no generated overview.
+      profileStatus: { notIn: ['suppressed', 'merged'] },
       OR: [{ aiSummaryAt: null }, { aiSummaryAt: { lt: staleBefore } }],
     },
     // Oldest / never-summarized first.

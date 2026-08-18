@@ -8,6 +8,7 @@ import {
 } from '@researchtrics/core';
 import { ok, fail } from '@/lib/api';
 import { getCurrentUser } from '@/lib/current-user';
+import { enforceRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user?.researcher) throw unauthorized('Sign in as a researcher to use the AI Assistant');
+    await enforceRateLimit('assistant', `user:${user.researcher.id}`);
 
     const body = (await req.json().catch(() => ({}))) as { task?: string; material?: string };
     const task = body.task as AssistantTask | undefined;

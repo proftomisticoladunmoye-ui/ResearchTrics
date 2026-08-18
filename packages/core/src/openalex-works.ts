@@ -58,6 +58,9 @@ function stripPrefix(v: unknown, re: RegExp): string | undefined {
 
 /** Map one OpenAlex work → a publication-create input, or null if unusable. */
 export function mapOpenAlexWork(work: unknown): CreatePublicationInput | null {
+  // External OpenAlex response — an untyped, deeply-nested third-party shape.
+  // `any` is intentional here; every field access below is defensively guarded.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = work as Record<string, any>;
   const title = (typeof w?.title === 'string' ? w.title : w?.display_name)?.trim();
   if (!title) return null;
@@ -68,6 +71,7 @@ export function mapOpenAlexWork(work: unknown): CreatePublicationInput | null {
 
   const authors: NormalizedAuthorInput[] = Array.isArray(w?.authorships)
     ? w.authorships
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((au: any): NormalizedAuthorInput | null => {
           const rawName = typeof au?.author?.display_name === 'string' ? au.author.display_name : null;
           if (!rawName) return null;

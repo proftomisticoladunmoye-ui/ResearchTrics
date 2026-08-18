@@ -145,6 +145,8 @@ export const RATE_LIMITS = {
   upload: { limit: 40, windowMs: 60 * 60_000 },
   /** Anonymous read-heavy API per IP. */
   publicApi: { limit: 120, windowMs: 60_000 },
+  /** AI Assistant generations per user — bounds external-provider cost/abuse. */
+  assistant: { limit: 30, windowMs: 10 * 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { validateSession, type Actor } from '@researchtrics/core';
 import { prisma } from '@researchtrics/db';
@@ -19,8 +20,12 @@ export interface CurrentUser {
 /**
  * Resolve the authenticated user for server components / route handlers.
  * Returns null when unauthenticated. Never throws on missing session.
+ *
+ * Memoized per request with React `cache()` so multiple callers in one render
+ * (root layout, header, mobile tab bar, the page itself) share a single session
+ * validation + lookup instead of re-querying the database each time.
  */
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+export const getCurrentUser = cache(async function getCurrentUser(): Promise<CurrentUser | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
@@ -54,4 +59,4 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
         }
       : null,
   };
-}
+});

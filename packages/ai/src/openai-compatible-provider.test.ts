@@ -21,7 +21,7 @@ describe('OpenAICompatibleProvider (injected fetch — offline)', () => {
   it('POSTs to /chat/completions with bearer auth + model, parses the choice', async () => {
     let url = '';
     let auth = '';
-    let sentBody: any = null;
+    let sentBody: { model: string; messages: Array<{ role: string; content: string }> } | null = null;
     const fakeFetch = (async (u: string, init?: RequestInit) => {
       url = u;
       auth = String((init?.headers as Record<string, string>).authorization);
@@ -41,16 +41,16 @@ describe('OpenAICompatibleProvider (injected fetch — offline)', () => {
 
     expect(url).toBe('https://openrouter.ai/api/v1/chat/completions');
     expect(auth).toBe('Bearer secret');
-    expect(sentBody.model).toBe('anthropic/claude-haiku-4.5');
-    expect(sentBody.messages[0].role).toBe('system');
-    expect(sentBody.messages[0].content).toContain('ONLY the verified platform records');
+    expect(sentBody!.model).toBe('anthropic/claude-haiku-4.5');
+    expect(sentBody!.messages[0]!.role).toBe('system');
+    expect(sentBody!.messages[0]!.content).toContain('ONLY the verified platform records');
     expect(gen.text).toBe('A grounded summary.');
     expect(gen.model).toBe('openrouter:anthropic/claude-haiku-4.5');
     expect(gen.external).toBe(true);
   });
 
   it('uses the assist system prompt in assist mode and sends the material', async () => {
-    let sentBody: any = null;
+    let sentBody: { model: string; messages: Array<{ role: string; content: string }> } | null = null;
     const fakeFetch = (async (_u: string, init?: RequestInit) => {
       sentBody = JSON.parse(String(init?.body));
       return { ok: true, json: async () => ({ choices: [{ message: { content: 'Draft.' } }] }) };
@@ -59,8 +59,8 @@ describe('OpenAICompatibleProvider (injected fetch — offline)', () => {
     await new OpenAICompatibleProvider({ apiKey: 'k', model: 'x/y', fetchImpl: fakeFetch }).generateGrounded(
       assistCtx,
     );
-    expect(sentBody.messages[0].content).toContain('NEVER fabricate evidence');
-    expect(sentBody.messages[1].content).toContain('numeracy intervention');
+    expect(sentBody!.messages[0]!.content).toContain('NEVER fabricate evidence');
+    expect(sentBody!.messages[1]!.content).toContain('numeracy intervention');
   });
 
   it('honors a custom base URL', async () => {

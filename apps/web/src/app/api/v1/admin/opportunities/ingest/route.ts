@@ -14,7 +14,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const schema = z.object({
-  source: z.enum(['fixture', 'grants_gov', 'eu_funding']),
+  source: z.enum(['fixture', 'grants_gov', 'eu_funding', 'wikicfp']),
   keyword: z.string().max(200).optional(),
   rows: z.number().int().min(1).max(200).optional(),
 });
@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     const provider = createOpportunityProvider(parsed.data.source, {
       grantsGov: { baseUrl: process.env.GRANTS_GOV_BASE_URL },
       euFunding: { baseUrl: process.env.EU_FUNDING_BASE_URL },
+      wikicfp: { category: process.env.WIKICFP_CATEGORY },
     });
     const result = await ingestOpportunities(provider, {
       keyword: parsed.data.keyword,

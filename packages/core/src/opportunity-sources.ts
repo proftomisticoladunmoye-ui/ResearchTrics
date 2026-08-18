@@ -14,6 +14,23 @@ import type { OpportunityType } from '@researchtrics/db';
  * reviewed.
  */
 
+/**
+ * Infer the opportunity type from its title, so funding feeds (which return
+ * everything as "grant") still surface fellowships, awards, positions, training,
+ * and conferences. Falls back to `fallback` when nothing matches.
+ */
+export function classifyOpportunityType(title: string, fallback: OpportunityType = 'grant'): OpportunityType {
+  const t = title.toLowerCase();
+  if (/\bcall for papers\b|\bcfp\b/.test(t)) return 'call_for_papers';
+  if (/\bconferenc|\bsymposium|\bcongress|\bworkshop\b/.test(t)) return 'conference';
+  if (/\bfellowship|\bfellow\b/.test(t)) return 'fellowship';
+  if (/\bpost-?doc|postdoctoral|\bvacanc|\blecturer|\bprofessor|\bfaculty position|\bposition\b|\brecruit/.test(t))
+    return 'position';
+  if (/\baward\b|\bprize\b|\bmedal\b/.test(t)) return 'award';
+  if (/\btraining\b|summer school|\bcourse\b|\bbootcamp|\bschool\b/.test(t)) return 'training';
+  return fallback;
+}
+
 export interface NormalizedOpportunity {
   /** Stable id from the source (for logging/traceability). */
   readonly externalId: string;
@@ -108,7 +125,7 @@ export function mapGrantsGov(hit: GrantsGovHit): NormalizedOpportunity | null {
   return {
     externalId: id,
     title,
-    type: 'grant',
+    type: classifyOpportunityType(title, 'grant'),
     organization: (hit.agencyName ?? hit.agency)?.trim() || undefined,
     country: 'US',
     url,
@@ -189,7 +206,7 @@ export function mapEuFunding(result: EuFundingResult): NormalizedOpportunity | n
   return {
     externalId: id,
     title,
-    type: 'grant',
+    type: classifyOpportunityType(title, 'grant'),
     organization: 'European Commission',
     country: 'EU',
     url: result.url,
@@ -234,19 +251,100 @@ export class EuFundingProvider implements OpportunityProvider {
   }
 }
 
+// ---------- WikiCFP (conference calls-for-papers, via RSS) ----------
+
+export interface WikiCfpConfig {
+  /** RSS base; a category is appended. Defaults to the public feed. */
+  baseUrl?: string;
+  /** Category, e.g. "computer science". */
+  category?: string;
+  fetchImpl?: typeof fetch;
+}
+
+const HTML_ENTITIES: Record<string, string> = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'" };
+function decodeEntities(s: string): string {
+  return s.replace(/&amp;|&lt;|&gt;|&quot;|&#39;|&apos;/g, (m) => HTML_ENTITIES[m] ?? m).trim();
+}
+
+/** Extract <item> field values from an RSS string (small, dependency-free). */
+function rssItems(xml: string): Array<Record<string, string>> {
+  const items: Array<Record<string, string>> = [];
+  for (const block of xml.split(/<item[\s>]/i).slice(1)) {
+    const body = block.split(/<\/item>/i)[0] ?? '';
+    const field = (tag: string) => {
+      const m = body.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+      return m ? decodeEntities(m[1]!.replace(/<!\[CDATA\[|\]\]>/g, '')) : '';
+    };
+    items.push({ title: field('title'), link: field('link'), description: field('description'), guid: field('guid') });
+  }
+  return items;
+}
+
+/** Pure mapper: a WikiCFP RSS item → NormalizedOpportunity (skips invalid). */
+export function mapWikiCfpItem(item: Record<string, string>): NormalizedOpportunity | null {
+  const title = item.title?.trim();
+  if (!title || !item.link) return null;
+  // Description ends with "[Location] [Start - End]" brackets.
+  const brackets = [...(item.description ?? '').matchAll(/\[([^\]]+)\]/g)].map((m) => m[1]!.trim());
+  const location = brackets.length >= 2 ? brackets[brackets.length - 2] : undefined;
+  const dateRange = brackets.length >= 1 ? brackets[brackets.length - 1] : undefined;
+  const country = location && location !== 'Virtual' ? location.split(',').pop()?.trim() : undefined;
+  const endDate = dateRange?.split(/[-–]/).pop()?.trim();
+  const deadline = endDate ? new Date(endDate) : undefined;
+
+  return {
+    externalId: item.guid || item.link,
+    title,
+    type: 'call_for_papers',
+    organization: 'WikiCFP',
+    country,
+    url: item.link,
+    sourceUrl: item.link,
+    deadline: deadline && !Number.isNaN(deadline.getTime()) ? deadline : undefined,
+  };
+}
+
+export class WikiCfpProvider implements OpportunityProvider {
+  readonly name = 'wikicfp';
+  private readonly baseUrl: string;
+  private readonly category: string;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(config: WikiCfpConfig = {}) {
+    this.baseUrl = (config.baseUrl ?? 'https://www.wikicfp.com/cfp/rss').replace(/\/$/, '');
+    this.category = config.category ?? 'research';
+    this.fetchImpl = config.fetchImpl ?? fetch;
+  }
+
+  async fetchOpportunities(query: OpportunityQuery): Promise<NormalizedOpportunity[]> {
+    const cat = encodeURIComponent(query.keyword ?? this.category);
+    const res = await this.fetchImpl(`${this.baseUrl}?cat=${cat}`, {
+      headers: { 'user-agent': 'ResearchTrics/1.0 (+https://www.researchtrics.com)' },
+    });
+    if (!res.ok) throw new Error(`WikiCFP fetch failed: ${res.status}`);
+    const xml = await res.text();
+    return rssItems(xml)
+      .map(mapWikiCfpItem)
+      .filter((o): o is NormalizedOpportunity => o !== null)
+      .slice(0, query.rows ?? 50);
+  }
+}
+
 // ---------- Factory ----------
 
-export type OpportunitySourceName = 'fixture' | 'grants_gov' | 'eu_funding';
+export type OpportunitySourceName = 'fixture' | 'grants_gov' | 'eu_funding' | 'wikicfp';
 
 export function createOpportunityProvider(
   name: OpportunitySourceName,
-  config: { grantsGov?: GrantsGovConfig; euFunding?: EuFundingConfig } = {},
+  config: { grantsGov?: GrantsGovConfig; euFunding?: EuFundingConfig; wikicfp?: WikiCfpConfig } = {},
 ): OpportunityProvider {
   switch (name) {
     case 'grants_gov':
       return new GrantsGovProvider(config.grantsGov);
     case 'eu_funding':
       return new EuFundingProvider(config.euFunding);
+    case 'wikicfp':
+      return new WikiCfpProvider(config.wikicfp);
     case 'fixture':
     default:
       return new FixtureOpportunityProvider();

@@ -662,6 +662,23 @@ async function main() {
       'Grants.gov mapper normalizes a hit with provenance (offline)',
       grantsGovMapped?.type === 'grant' && grantsGovMapped?.country === 'US' && !!grantsGovMapped?.sourceUrl,
     );
+    // Type classification surfaces non-grant categories from funding titles.
+    check(
+      'opportunity type is classified from the title (jobs/fellowships surfaced §20)',
+      core.classifyOpportunityType('Postdoctoral Fellowship in Physics') === 'fellowship' &&
+        core.mapGrantsGov({ id: 7, title: 'Faculty Position — Lecturer', closeDate: '01/01/2027' })?.type === 'position',
+    );
+    // WikiCFP conference source (offline via injected fetch).
+    const wikicfpXml = '<rss><channel><item><title>ICML 2027 : Conference on Machine Learning</title><link>http://wikicfp.com/e/1</link><description>desc [Vienna, Austria] [Jul 1, 2027 - Jul 5, 2027]</description><guid>cfp-9</guid></item></channel></rss>';
+    const wikicfp = core.createOpportunityProvider('wikicfp', {
+      wikicfp: { fetchImpl: (async () => ({ ok: true, text: async () => wikicfpXml })) as unknown as typeof fetch },
+    });
+    const cfpIngest = await core.ingestOpportunities(wikicfp);
+    check(
+      'WikiCFP ingests conference calls-for-papers (§20)',
+      cfpIngest.created >= 1 && cfpIngest.source === 'import:wikicfp',
+      `created=${cfpIngest.created}`,
+    );
 
     console.log('\nDOI import links the importer as author (§15 fix)');
     // A publication that exists but is not linked to reg's researcher…

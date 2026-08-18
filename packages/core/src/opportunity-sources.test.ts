@@ -4,6 +4,9 @@ import {
   GrantsGovProvider,
   mapEuFunding,
   EuFundingProvider,
+  mapWikiCfpItem,
+  WikiCfpProvider,
+  classifyOpportunityType,
   FixtureOpportunityProvider,
   createOpportunityProvider,
 } from './opportunity-sources';
@@ -127,6 +130,56 @@ describe('EuFundingProvider (injected fetch — offline)', () => {
   });
 });
 
+describe('classifyOpportunityType', () => {
+  it('detects non-grant types from the title', () => {
+    expect(classifyOpportunityType('Marie Curie Fellowship 2026')).toBe('fellowship');
+    expect(classifyOpportunityType('Postdoctoral Position in Genomics')).toBe('position');
+    expect(classifyOpportunityType('Call for Papers: ICML 2026')).toBe('call_for_papers');
+    expect(classifyOpportunityType('16th International Conference on AI')).toBe('conference');
+    expect(classifyOpportunityType('Young Investigator Award')).toBe('award');
+    expect(classifyOpportunityType('Summer School on Data Science')).toBe('training');
+    expect(classifyOpportunityType('Research Project Grant R01')).toBe('grant');
+  });
+  it('flows through the Grants.gov mapper (fellowship surfaced from funding data)', () => {
+    const o = mapGrantsGov({ id: 1, title: 'NRSA Individual Postdoctoral Fellowship', closeDate: '01/01/2027' });
+    expect(o!.type).toBe('fellowship');
+  });
+});
+
+describe('mapWikiCfpItem (conference CFP RSS)', () => {
+  it('maps a CFP with location/country + conference end-date deadline', () => {
+    const o = mapWikiCfpItem({
+      title: 'AIAA 2026 : 16th International Conference on AI',
+      link: 'http://www.wikicfp.com/cfp/servlet/event.showcfp?eventid=202738',
+      description: '16th International Conference on AI [Zurich, Switzerland] [Nov 27, 2026 - Nov 28, 2026]',
+      guid: 'cfp-1043571-S@wikicfp.com',
+    });
+    expect(o).not.toBeNull();
+    expect(o!.type).toBe('call_for_papers');
+    expect(o!.organization).toBe('WikiCFP');
+    expect(o!.country).toBe('Switzerland');
+    expect(o!.deadline?.getUTCFullYear()).toBe(2026);
+    expect(o!.externalId).toContain('cfp-1043571');
+  });
+  it('skips items without a title or link', () => {
+    expect(mapWikiCfpItem({ title: '', link: 'x', description: '', guid: 'g' })).toBeNull();
+  });
+});
+
+describe('WikiCfpProvider (injected fetch — offline)', () => {
+  it('parses an RSS payload into opportunities', async () => {
+    const xml = `<rss><channel>
+      <item><title>Conf A</title><link>http://x/a</link><description>desc [Paris, France] [Jan 1, 2027 - Jan 2, 2027]</description><guid>g-a</guid></item>
+      <item><title>Conf B</title><link>http://x/b</link><description>desc [Virtual] [Feb 1, 2027 - Feb 2, 2027]</description><guid>g-b</guid></item>
+    </channel></rss>`;
+    const fakeFetch = (async () => ({ ok: true, text: async () => xml })) as unknown as typeof fetch;
+    const items = await new WikiCfpProvider({ fetchImpl: fakeFetch }).fetchOpportunities({ rows: 10 });
+    expect(items).toHaveLength(2);
+    expect(items[0]!.country).toBe('France');
+    expect(items[1]!.country).toBeUndefined(); // Virtual
+  });
+});
+
 describe('provider factory + fixture', () => {
   it('fixture returns deterministic sample data', async () => {
     const items = await new FixtureOpportunityProvider().fetchOpportunities({});
@@ -136,6 +189,7 @@ describe('provider factory + fixture', () => {
   it('factory resolves names', () => {
     expect(createOpportunityProvider('grants_gov').name).toBe('grants_gov');
     expect(createOpportunityProvider('eu_funding').name).toBe('eu_funding');
+    expect(createOpportunityProvider('wikicfp').name).toBe('wikicfp');
     expect(createOpportunityProvider('fixture').name).toBe('fixture');
   });
 });

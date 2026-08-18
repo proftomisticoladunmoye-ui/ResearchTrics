@@ -57,6 +57,7 @@ export function OpportunityIngestForm() {
         <select id="source" name="source" className={inputClass} defaultValue="grants_gov">
           <option value="grants_gov">Grants.gov (US federal — live)</option>
           <option value="eu_funding">EU Funding &amp; Tenders (verify on first run)</option>
+          <option value="wikicfp">WikiCFP (conference calls-for-papers)</option>
           <option value="fixture">Fixture (offline sample)</option>
         </select>
       </Field>

@@ -224,9 +224,10 @@ function resolveProvider() {
     provider: env.AI_PROVIDER,
     apiKey: env.AI_API_KEY,
     model: env.AI_MODEL,
+    baseUrl: env.AI_BASE_URL,
   });
   if (fellBack) {
-    logger.warn('AI_PROVIDER=claude but AI_API_KEY is unset — using the on-platform provider');
+    logger.warn('An external AI_PROVIDER was set but AI_API_KEY is unset — using the on-platform provider');
   }
   return { provider, fellBack };
 }

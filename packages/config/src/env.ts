@@ -32,9 +32,12 @@ const serverEnvSchema = z.object({
 
   // AI Research Intelligence (Spec §29, §48). Grounded, provider-agnostic.
   // Defaults to the on-platform provider — no key needed, no data leaves.
-  AI_PROVIDER: z.enum(['local', 'claude']).default('local'),
+  // `openrouter` routes via an OpenAI-compatible gateway (set AI_MODEL to a slug
+  // like `anthropic/claude-haiku-4.5`); AI_BASE_URL can point at another gateway.
+  AI_PROVIDER: z.enum(['local', 'claude', 'openrouter']).default('local'),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().default('claude-opus-5'),
+  AI_BASE_URL: z.string().url().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

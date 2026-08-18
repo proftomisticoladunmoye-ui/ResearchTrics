@@ -152,9 +152,7 @@ export function AssistantConsole() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Badge variant="neutral">AI-generated</Badge>
-              <Badge variant="outline">
-                {result.offline ? 'on-platform' : result.external ? 'Claude' : 'on-platform'}
-              </Badge>
+              <Badge variant="outline">{result.offline || !result.external ? 'on-platform' : result.model}</Badge>
             </div>
             <Button onClick={copy} size="sm" variant="ghost">
               {copied ? 'Copied' : 'Copy'}

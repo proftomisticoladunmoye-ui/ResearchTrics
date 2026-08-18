@@ -182,6 +182,7 @@ function resolveProvider() {
     provider: env.AI_PROVIDER,
     apiKey: env.AI_API_KEY,
     model: env.AI_MODEL,
+    baseUrl: env.AI_BASE_URL,
   });
   return { provider, fellBack };
 }

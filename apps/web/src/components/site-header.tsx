@@ -3,14 +3,14 @@ import { Logo, Button, Badge } from '@researchtrics/ui';
 import { countUnreadNotifications } from '@researchtrics/core';
 import { getCurrentUser } from '@/lib/current-user';
 import { LogoutButton } from './logout-button';
+import { AddNewMenu } from './add-new-menu';
 
+// Lean, purposeful nav. Browse-by-type (researchers, publications, projects,
+// institutions, journals, datasets…) all live inside Discover, so they are not
+// repeated here; the header carries distinct destinations only.
 const NAV = [
   { href: '/discover', label: 'Discover' },
-  { href: '/researchers', label: 'Researchers' },
-  { href: '/publications', label: 'Publications' },
-  { href: '/projects', label: 'Projects' },
   { href: '/opportunities', label: 'Opportunities' },
-  { href: '/institutions', label: 'Institutions' },
 ];
 
 /** Global header — blue-forward, scholarly (Spec §80). */
@@ -65,6 +65,7 @@ export async function SiteHeader() {
 
           {user ? (
             <>
+              {user.researcher ? <AddNewMenu /> : null}
               {user.researcher ? (
                 <Link
                   href="/notifications"

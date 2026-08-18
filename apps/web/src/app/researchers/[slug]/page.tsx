@@ -30,7 +30,9 @@ export async function generateMetadata({
   }
   const description = r.biography
     ? r.biography.slice(0, 200)
-    : `${r.displayName} on ResearchTrics — ${r.researchtricsId}.`;
+    : r.aiSummary
+      ? r.aiSummary.slice(0, 200)
+      : `${r.displayName} on ResearchTrics — ${r.researchtricsId}.`;
   return {
     title: r.displayName,
     description,
@@ -175,6 +177,18 @@ export default async function ResearcherProfilePage({
             <section>
               <h2 className="text-lg font-semibold text-rt-text">About</h2>
               <p className="mt-2 whitespace-pre-line text-rt-text">{r.biography}</p>
+            </section>
+          ) : r.aiSummary ? (
+            <section>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-rt-text">Overview</h2>
+                <Badge variant="neutral">AI-generated</Badge>
+              </div>
+              <p className="mt-2 whitespace-pre-line text-rt-text">{r.aiSummary}</p>
+              <p className="mt-1 text-xs text-rt-muted">
+                An AI overview generated from this profile&rsquo;s verified records — an
+                interpretation, not a verified statement.{isOwner ? ' Add a bio to replace it.' : ''}
+              </p>
             </section>
           ) : null}
 

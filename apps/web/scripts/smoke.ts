@@ -198,6 +198,20 @@ async function main() {
       intel.expertise.length > 0 && intel.expertise.every((t) => t.evidence.length > 0),
     );
 
+    console.log('\nBackground AI summary precompute (worker-cached, §29/§48)');
+    const pre = await core.precomputeProfileSummary(reg.researcher.id);
+    check('profile summary precomputed for a researcher with content', pre.updated, `model=${pre.model}`);
+    const cachedSummary = await prisma.researcher.findUnique({
+      where: { id: reg.researcher.id },
+      select: { aiSummary: true, aiSummaryAt: true, aiSummaryModel: true },
+    });
+    check(
+      'AI summary cached with model + timestamp',
+      !!cachedSummary?.aiSummary && !!cachedSummary?.aiSummaryAt && !!cachedSummary?.aiSummaryModel,
+    );
+    const batch = await core.precomputeProfileSummaries({ limit: 10, staleAfterDays: 0 });
+    check('batch precompute reports processed/updated counts', batch.processed >= 1, JSON.stringify(batch));
+
     console.log('\nAI Assistant (grounded writing help, never fabricates)');
     const kwres = await core.runAssistantTask(reg.researcher.id, {
       task: 'keywords',

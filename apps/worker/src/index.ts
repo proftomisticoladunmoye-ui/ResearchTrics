@@ -10,6 +10,7 @@ import {
   ingestOpportunities,
   notifyOpportunityMatches,
   createOpportunityProvider,
+  precomputeProfileSummaries,
   sendEngagementDigests,
   emailProviderFromEnv,
   setEmailProvider,
@@ -201,6 +202,27 @@ opportunityMatchWorker.on('failed', (job, err) =>
   logger.error({ jobId: job?.id, err }, 'Opportunity matching failed'),
 );
 
+// Background AI profile summaries (§29, §48). Precomputes grounded overviews so
+// profile pages never call an LLM on request, and any external-provider cost
+// (e.g. OpenRouter) is paid once per refresh. Gated on AI_SUMMARIES_ENABLED so
+// it only runs when the operator opts in and has an AI provider configured.
+const aiSummariesQueue = new Queue(QUEUES.aiSummaries, { connection, defaultJobOptions });
+const aiSummariesWorker = new Worker(
+  QUEUES.aiSummaries,
+  async (job: Job) => {
+    const result = await precomputeProfileSummaries({
+      limit: Number(process.env.AI_SUMMARIES_BATCH ?? 50),
+      staleAfterDays: Number(process.env.AI_SUMMARIES_STALE_DAYS ?? 30),
+    });
+    logger.info({ jobId: job.id, ...result }, 'AI profile summaries refreshed');
+    return result;
+  },
+  { connection, concurrency: 1 },
+);
+aiSummariesWorker.on('failed', (job, err) =>
+  logger.error({ jobId: job?.id, err }, 'AI profile summaries job failed'),
+);
+
 async function bootstrap(): Promise<void> {
   logger.info({ redisUrl: redisUrl.replace(/:[^:@/]*@/, ':****@') }, 'Starting ResearchTrics worker');
   // Enqueue a self-check so the pipeline is exercised on boot.
@@ -264,6 +286,15 @@ async function bootstrap(): Promise<void> {
     .add('match', {}, { repeat: { every: 24 * 60 * 60 * 1000 }, jobId: 'opportunity-match-daily' })
     .catch((err) => logger.warn({ err }, 'Could not schedule opportunity matching'));
   logger.info('Opportunity match notifications scheduled (immediate + daily)');
+
+  // Background AI profile summaries, when enabled (needs an AI provider set).
+  if (process.env.AI_SUMMARIES_ENABLED === 'true') {
+    await aiSummariesQueue.add('refresh', {}).catch(() => {});
+    await aiSummariesQueue
+      .add('refresh', {}, { repeat: { every: 24 * 60 * 60 * 1000 }, jobId: 'ai-summaries-daily' })
+      .catch((err) => logger.warn({ err }, 'Could not schedule AI summaries'));
+    logger.info('AI profile summaries scheduled (immediate + daily)');
+  }
 }
 
 async function shutdown(signal: string): Promise<void> {
@@ -276,12 +307,14 @@ async function shutdown(signal: string): Promise<void> {
   await discoveryIngestWorker.close();
   await emailDigestWorker.close();
   await opportunityMatchWorker.close();
+  await aiSummariesWorker.close();
   await healthQueue.close();
   await opportunityQueue.close();
   await ingestQueue.close();
   await discoveryIngestQueue.close();
   await emailDigestQueue.close();
   await opportunityMatchQueue.close();
+  await aiSummariesQueue.close();
   await connection.quit();
   process.exit(0);
 }

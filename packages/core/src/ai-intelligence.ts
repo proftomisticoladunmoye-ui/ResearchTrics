@@ -278,6 +278,90 @@ export async function summarizeProfile(
   };
 }
 
+// ---------- Background precompute (worker, §29/§48) ----------
+
+/**
+ * Generate and CACHE a researcher's grounded profile summary. Runs in the
+ * background (worker) so profile pages never call an LLM on request, and so the
+ * cost of any external provider (e.g. OpenRouter) is paid once per refresh, not
+ * per view. Profiles too sparse to summarize are stamped (so they aren't
+ * re-scanned every run) but store no summary text.
+ */
+export async function precomputeProfileSummary(
+  researcherId: string,
+  client: PrismaClient = prisma,
+): Promise<{ updated: boolean; empty: boolean; model: string }> {
+  const records = await gatherRecords(researcherId, client);
+  const facts = buildFacts(records);
+
+  // A lone profile fact means no real content to summarize — skip generation.
+  const hasContent = facts.length > 1;
+  if (!hasContent) {
+    await client.researcher.update({
+      where: { id: researcherId },
+      data: { aiSummaryAt: new Date(), aiSummary: null, aiSummaryModel: null },
+    });
+    return { updated: false, empty: true, model: 'none' };
+  }
+
+  const { provider } = resolveProvider();
+  const generation = await provider.generateGrounded({
+    task: 'profile-summary',
+    instruction: 'Write a concise, factual summary of this researcher for their public profile.',
+    facts,
+    containsPrivate: false,
+  });
+
+  const text = generation.text.trim();
+  await client.researcher.update({
+    where: { id: researcherId },
+    data: {
+      aiSummary: text || null,
+      aiSummaryModel: text ? generation.model : null,
+      aiSummaryAt: new Date(),
+    },
+  });
+  return { updated: !!text, empty: !text, model: generation.model };
+}
+
+/**
+ * Batch-refresh cached profile summaries for researchers that have never been
+ * summarized or whose summary is stale. Bounded by `limit`; safe to run daily.
+ */
+export async function precomputeProfileSummaries(
+  opts: { limit?: number; staleAfterDays?: number } = {},
+  client: PrismaClient = prisma,
+): Promise<{ processed: number; updated: number; skipped: number }> {
+  const limit = opts.limit ?? 50;
+  const staleBefore = new Date(Date.now() - (opts.staleAfterDays ?? 30) * 86_400_000);
+
+  const candidates = await client.researcher.findMany({
+    where: {
+      deletedAt: null,
+      profileVisibility: 'public',
+      OR: [{ aiSummaryAt: null }, { aiSummaryAt: { lt: staleBefore } }],
+    },
+    // Oldest / never-summarized first.
+    orderBy: [{ aiSummaryAt: { sort: 'asc', nulls: 'first' } }],
+    select: { id: true },
+    take: limit,
+  });
+
+  let updated = 0;
+  let skipped = 0;
+  for (const c of candidates) {
+    try {
+      const r = await precomputeProfileSummary(c.id, client);
+      if (r.updated) updated += 1;
+      else skipped += 1;
+    } catch (err) {
+      skipped += 1;
+      logger.warn({ err, researcherId: c.id }, 'Profile summary precompute failed');
+    }
+  }
+  return { processed: candidates.length, updated, skipped };
+}
+
 // ---------- Bundle for the dashboard ----------
 
 export interface ResearcherIntelligence {

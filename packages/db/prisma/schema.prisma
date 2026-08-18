@@ -400,6 +400,13 @@ model Researcher {
   identityConfidence Int?          @map("identity_confidence") // 0..100
   discoverySource    String?       @map("discovery_source")
 
+  // Cached grounded AI overview (§29, §48), precomputed in the background so
+  // profile pages never call an LLM on request. Labelled AI-generated in the UI;
+  // never asserted as verified fact.
+  aiSummary      String?   @map("ai_summary")
+  aiSummaryModel String?   @map("ai_summary_model")
+  aiSummaryAt    DateTime? @map("ai_summary_at")
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")

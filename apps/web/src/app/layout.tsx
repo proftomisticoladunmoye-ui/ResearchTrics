@@ -3,6 +3,8 @@ import './globals.css';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { MobileTabBar } from '@/components/mobile-tab-bar';
+import { getCurrentUser } from '@/lib/current-user';
+import { countUnreadNotifications } from '@researchtrics/core';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -26,7 +28,10 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
+  const unread = user?.researcher ? await countUnreadNotifications(user.researcher.id) : 0;
+
   return (
     <html lang="en">
       <body className="font-sans antialiased pb-16 md:pb-0">
@@ -39,7 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteHeader />
         <main id="main">{children}</main>
         <SiteFooter />
-        <MobileTabBar />
+        <MobileTabBar unreadCount={unread} />
       </body>
     </html>
   );

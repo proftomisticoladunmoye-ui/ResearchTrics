@@ -63,7 +63,7 @@ const TABS: Array<{ href: string; label: string; icon: ReactNode; match: (p: str
   },
 ];
 
-export function MobileTabBar() {
+export function MobileTabBar({ unreadCount = 0 }: { unreadCount?: number }) {
   const pathname = usePathname() ?? '/';
   return (
     <nav
@@ -73,28 +73,40 @@ export function MobileTabBar() {
       <ul className="mx-auto flex max-w-lg items-stretch justify-around">
         {TABS.map((t) => {
           const active = t.match(pathname);
+          const badge = t.href === '/notifications' && unreadCount > 0 ? unreadCount : 0;
           return (
             <li key={t.href} className="flex-1">
               <Link
                 href={t.href}
                 aria-current={active ? 'page' : undefined}
+                aria-label={badge > 0 ? `${t.label} (${badge} unread)` : t.label}
                 className={`flex flex-col items-center gap-1 py-2 text-[11px] ${
                   active ? 'text-rt-blue' : 'text-rt-muted'
                 }`}
               >
-                <svg
-                  width="22"
-                  height="22"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  {t.icon}
-                </svg>
+                <span className="relative">
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    {t.icon}
+                  </svg>
+                  {badge > 0 ? (
+                    <span
+                      className="absolute -right-2.5 -top-1.5 min-w-[16px] rounded-full bg-rt-error px-1 text-center text-[10px] font-semibold leading-4 text-rt-white"
+                      aria-hidden
+                    >
+                      {badge > 9 ? '9+' : badge}
+                    </span>
+                  ) : null}
+                </span>
                 {t.label}
               </Link>
             </li>

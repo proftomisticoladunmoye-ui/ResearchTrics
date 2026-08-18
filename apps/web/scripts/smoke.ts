@@ -198,6 +198,31 @@ async function main() {
       intel.expertise.length > 0 && intel.expertise.every((t) => t.evidence.length > 0),
     );
 
+    console.log('\nAI Assistant (grounded writing help, never fabricates)');
+    const kwres = await core.runAssistantTask(reg.researcher.id, {
+      task: 'keywords',
+      material: 'Psychometric measurement invariance in cross-cultural testing of anxiety scales.',
+    });
+    check(
+      'assistant returns keywords drawn from the author text',
+      /psychometric|measurement|invariance|anxiety/i.test(kwres.text),
+      kwres.text.slice(0, 60),
+    );
+    check('assistant output carries a no-fabrication disclaimer + provider label', !!kwres.disclaimer && !!kwres.model);
+    const absres = await core.runAssistantTask(reg.researcher.id, {
+      task: 'abstract',
+      material: 'We piloted a numeracy intervention across ten schools and measured outcomes at six months.',
+    });
+    check(
+      'abstract scaffold inserts a placeholder, never invents a result (on-platform)',
+      !absres.external ? /\[RESULT NEEDED\]/.test(absres.text) : absres.text.length > 0,
+    );
+    let tooShort = false;
+    await core.runAssistantTask(reg.researcher.id, { task: 'improve', material: 'too short' }).catch(() => {
+      tooShort = true;
+    });
+    check('assistant rejects material that is too thin (BAD_REQUEST)', tooShort);
+
     console.log('\nInstitutional platform (tenant-scoped, grounded)');
     const institution = await core.findOrCreateInstitutionByName('Smoke University', { country: 'GB' });
     await core.addAffiliation({ researcherId: reg.researcher.id, institutionId: institution.id, verified: true });

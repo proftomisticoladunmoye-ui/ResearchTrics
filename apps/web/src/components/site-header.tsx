@@ -4,6 +4,7 @@ import { countUnreadNotifications } from '@researchtrics/core';
 import { getCurrentUser } from '@/lib/current-user';
 import { LogoutButton } from './logout-button';
 import { AddNewMenu } from './add-new-menu';
+import { AccountMenu } from './account-menu';
 
 // Lean, purposeful nav. Browse-by-type (researchers, publications, projects,
 // institutions, journals, datasets…) all live inside Discover, so they are not
@@ -83,13 +84,25 @@ export async function SiteHeader() {
                   ) : null}
                 </Link>
               ) : null}
-              <Link
-                href="/dashboard"
-                className="text-sm font-medium text-rt-blue hover:underline"
-              >
-                Dashboard
-              </Link>
-              <LogoutButton />
+              {user.researcher ? (
+                <AccountMenu
+                  displayName={user.researcher.displayName}
+                  slug={user.researcher.slug}
+                  researchtricsId={user.researcher.researchtricsId}
+                  photoUrl={user.researcher.photoUrl}
+                  email={user.email}
+                />
+              ) : (
+                <>
+                  <Link
+                    href="/dashboard"
+                    className="text-sm font-medium text-rt-blue hover:underline"
+                  >
+                    Dashboard
+                  </Link>
+                  <LogoutButton />
+                </>
+              )}
             </>
           ) : (
             <>

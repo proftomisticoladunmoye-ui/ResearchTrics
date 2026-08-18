@@ -7,7 +7,13 @@ export interface CurrentUser {
   id: string;
   email: string;
   actor: Actor;
-  researcher: { id: string; displayName: string; researchtricsId: string; slug: string } | null;
+  researcher: {
+    id: string;
+    displayName: string;
+    researchtricsId: string;
+    slug: string;
+    photoUrl: string | null;
+  } | null;
 }
 
 /**
@@ -44,6 +50,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
           displayName: researcher.displayName,
           researchtricsId: researcher.researchtricsId,
           slug: researcher.slug,
+          photoUrl: researcher.photoUrl,
         }
       : null,
   };

@@ -45,8 +45,8 @@ export default async function DashboardPage() {
           <Button asChild size="sm" variant="ghost">
             <Link href="/dashboard/collaborate">Collaborate</Link>
           </Button>
-          <Button asChild size="sm" variant="ghost">
-            <Link href="/dashboard/insights">AI Insights</Link>
+          <Button asChild size="sm" variant="accent">
+            <Link href="/dashboard/assistant">AI Assistant</Link>
           </Button>
           <Button asChild size="sm" variant="ghost">
             <Link href="/dashboard/opportunities">Opportunities</Link>

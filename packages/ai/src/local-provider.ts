@@ -26,6 +26,21 @@ export class LocalProvider implements AIProvider {
   ];
 
   generateGrounded(ctx: GroundedContext): Promise<AIGeneration> {
+    // Assist mode: the on-platform provider cannot compose original prose, so it
+    // returns the author's own material unchanged (never fabricating anything).
+    // Rich drafting is delivered by a configured external provider; callers that
+    // want structured offline help build it deterministically themselves.
+    if ((ctx.mode ?? 'summary') === 'assist') {
+      const text = (ctx.material ?? '').trim();
+      return Promise.resolve({
+        text,
+        model: 'local',
+        grounded: true,
+        sources: ctx.facts.map((f) => f.ref),
+        external: false,
+      });
+    }
+
     const rank = (kind: string) => {
       const i = LocalProvider.KIND_ORDER.indexOf(kind);
       return i === -1 ? LocalProvider.KIND_ORDER.length : i;

@@ -22,10 +22,23 @@ export interface GroundedFact {
   text: string;
 }
 
+/**
+ * Generation mode.
+ * - `summary`: strict, facts-only restatement of verified records. The provider
+ *   may use nothing beyond `facts` and must not add prose of its own (Spec §29).
+ * - `assist`: writing help. The provider drafts/edits/brainstorms from the
+ *   author's own supplied `material`, and may compose original prose — but it
+ *   must never fabricate data, results, citations, references, or metrics. It is
+ *   an aid to the author's writing, not a source of facts (never-fabricate rule).
+ */
+export type GenerationMode = 'summary' | 'assist';
+
 /** Everything a provider is permitted to see and use for one generation. */
 export interface GroundedContext {
-  /** Machine task key, e.g. `profile-summary`. */
+  /** Machine task key, e.g. `profile-summary` or `assist:abstract`. */
   task: string;
+  /** Generation mode. Defaults to `summary` when omitted. */
+  mode?: GenerationMode;
   /** What to produce, in plain language. */
   instruction: string;
   /**
@@ -33,6 +46,13 @@ export interface GroundedContext {
    * introduce any claim not supported by these facts.
    */
   facts: GroundedFact[];
+  /**
+   * Assist mode only: the author's own material to work from (their draft
+   * paragraph, title, key points, abstract…). Provided by the signed-in author
+   * about their own work; the provider treats it as the author's content to
+   * refine, never as a claim to verify.
+   */
+  material?: string;
   /**
    * True if `facts` include any non-public researcher data. External providers
    * must refuse to transmit private data without explicit authorization

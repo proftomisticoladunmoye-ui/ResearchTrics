@@ -25,6 +25,7 @@ export * from './analytics';
 export * from './collaboration';
 export * from './groups';
 export * from './ai-intelligence';
+export * from './ai-assistant';
 export * from './institution-portal';
 export * from './opportunities';
 export * from './opportunity-sources';

@@ -180,8 +180,22 @@ export async function findPublicationByDoi(
   doi: string,
   client: PrismaClient = prisma,
 ): Promise<{ id: string; slug: string } | null> {
+  return findPublicationByIdentifier('doi', doi.toLowerCase(), client);
+}
+
+/**
+ * Find an existing publication by any external identifier (doi, openalex, …).
+ * The (scheme, value) pair is globally unique, so this is the dedup key used to
+ * avoid creating a second row for a work already in the graph — essential for
+ * federation, where the same work is discovered via several co-authors.
+ */
+export async function findPublicationByIdentifier(
+  scheme: PublicationIdScheme,
+  value: string,
+  client: PrismaClient = prisma,
+): Promise<{ id: string; slug: string } | null> {
   const idRow = await client.publicationIdentifier.findUnique({
-    where: { scheme_value: { scheme: 'doi', value: doi.toLowerCase() } },
+    where: { scheme_value: { scheme, value } },
     include: { publication: { select: { id: true, slug: true } } },
   });
   return idRow?.publication ?? null;
@@ -199,8 +213,15 @@ export async function createPublicationFromNormalized(
 ): Promise<CreatePublicationResult> {
   const doi = input.doi?.toLowerCase();
 
+  // Dedup against the graph before creating — a work discovered via several
+  // co-authors must resolve to ONE publication. Check DOI first, then OpenAlex id
+  // (the identifier pair is globally unique, so creating a second row would throw).
   if (doi) {
     const existing = await findPublicationByDoi(doi, client);
+    if (existing) return { status: 'exists', publicationId: existing.id, slug: existing.slug };
+  }
+  if (input.openAlexId) {
+    const existing = await findPublicationByIdentifier('openalex', input.openAlexId, client);
     if (existing) return { status: 'exists', publicationId: existing.id, slug: existing.slug };
   }
 
@@ -253,14 +274,15 @@ export async function createPublicationFromNormalized(
       },
     });
 
-    // Identifiers
-    const identifiers: Array<{ scheme: PublicationIdScheme; value: string }> = [];
-    if (doi) identifiers.push({ scheme: 'doi', value: doi });
-    if (input.openAlexId) identifiers.push({ scheme: 'openalex', value: input.openAlexId });
-    for (const idf of identifiers) {
-      await tx.publicationIdentifier.create({
-        data: { publicationId: pub.id, scheme: idf.scheme, value: idf.value },
-      });
+    // Identifiers. skipDuplicates is a safety net: the (scheme, value) pair is
+    // globally unique, and the dedup checks above should already have routed a
+    // known work to its existing row — but a concurrent ingest must never crash
+    // the whole works-import for a researcher.
+    const identifiers: Array<{ publicationId: string; scheme: PublicationIdScheme; value: string }> = [];
+    if (doi) identifiers.push({ publicationId: pub.id, scheme: 'doi', value: doi });
+    if (input.openAlexId) identifiers.push({ publicationId: pub.id, scheme: 'openalex', value: input.openAlexId });
+    if (identifiers.length) {
+      await tx.publicationIdentifier.createMany({ data: identifiers, skipDuplicates: true });
     }
 
     // Authors (ordered; ORCID-matched links only)

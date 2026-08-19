@@ -118,6 +118,23 @@ async function main() {
     const again = await core.createPublicationFromNormalized(normalized);
     check('dedup on DOI returns existing (no duplicate)', again.status === 'exists' && again.publicationId === created.publicationId);
 
+    // A DOI-less work discovered via multiple co-authors must dedup on its
+    // OpenAlex id — not create a duplicate (which would violate the identifier
+    // unique constraint, as seen in production worker logs).
+    const oaWork = {
+      title: 'A Preprint Without a DOI',
+      outputType: 'preprint' as const,
+      openAlexId: 'W-smoke-dedup-1',
+      authors: [{ rawName: 'Grace Hopper' }],
+    };
+    const oa1 = await core.createPublicationFromNormalized(oaWork);
+    const oa2 = await core.createPublicationFromNormalized(oaWork);
+    check(
+      'dedup on OpenAlex id returns existing (no unique-constraint crash)',
+      oa1.status === 'created' && oa2.status === 'exists' && oa2.publicationId === oa1.publicationId,
+      `${oa1.status}/${oa2.status}`,
+    );
+
     console.log('\nCitation export & Google Scholar checker');
     const pubDetail = await core.getPublicationBySlug(created.slug);
     check('publication loads by slug', !!pubDetail);

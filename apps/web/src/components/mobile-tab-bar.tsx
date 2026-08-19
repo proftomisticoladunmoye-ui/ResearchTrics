@@ -10,9 +10,9 @@ import type { ReactNode } from 'react';
  */
 const TABS: Array<{ href: string; label: string; icon: ReactNode; match: (p: string) => boolean }> = [
   {
-    href: '/',
+    href: '/publications',
     label: 'Home',
-    match: (p) => p === '/',
+    match: (p) => p === '/' || p.startsWith('/publications'),
     icon: (
       <path d="M3 10.5 12 3l9 7.5M5 9.5V21h5v-6h4v6h5V9.5" />
     ),
@@ -20,7 +20,7 @@ const TABS: Array<{ href: string; label: string; icon: ReactNode; match: (p: str
   {
     href: '/discover',
     label: 'Discover',
-    match: (p) => p.startsWith('/discover') || p.startsWith('/researchers') || p.startsWith('/publications'),
+    match: (p) => p.startsWith('/discover') || p.startsWith('/researchers'),
     icon: (
       <>
         <circle cx="11" cy="11" r="7" />

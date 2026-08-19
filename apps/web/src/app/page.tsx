@@ -79,10 +79,12 @@ const RVM_DIMENSIONS = [
 ];
 
 export default async function HomePage() {
-  // Logged-in users get their app home (dashboard); anonymous visitors + crawlers
-  // see the marketing landing (keeps the homepage crawlable for SEO).
+  // Logged-in users get the general publications feed as their home (the
+  // dashboard/profile is reached from the account menu and the mobile Profile
+  // tab); anonymous visitors + crawlers see the marketing landing (keeps the
+  // homepage crawlable for SEO).
   const user = await getCurrentUser();
-  if (user) redirect('/dashboard');
+  if (user) redirect('/publications');
 
   return (
     <div>

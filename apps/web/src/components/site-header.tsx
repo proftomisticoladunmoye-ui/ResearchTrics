@@ -6,12 +6,14 @@ import { LogoutButton } from './logout-button';
 import { AddNewMenu } from './add-new-menu';
 import { AccountMenu } from './account-menu';
 
-// Lean, purposeful nav. Browse-by-type (researchers, publications, projects,
-// institutions, journals, datasets…) all live inside Discover, so they are not
-// repeated here; the header carries distinct destinations only.
+// Lean, purposeful nav. Browse-by-type (researchers, projects, institutions,
+// journals, datasets…) all live inside Discover, so they are not repeated here;
+// the header carries distinct destinations only. The logo is the "home" and
+// leads to the general publications feed.
 const NAV = [
   { href: '/discover', label: 'Discover' },
   { href: '/opportunities', label: 'Opportunities' },
+  { href: '/dashboard/assistant', label: 'AI Assistant' },
 ];
 
 /** Global header — blue-forward, scholarly (Spec §80). */
@@ -23,7 +25,7 @@ export async function SiteHeader() {
     <header className="sticky top-0 z-40 border-b border-rt-border bg-rt-white/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-4">
         <div className="flex items-center gap-8">
-          <Link href="/" aria-label="ResearchTrics home">
+          <Link href="/publications" aria-label="ResearchTrics — publications home">
             <Logo markSrc="/logo-mark.png" />
           </Link>
           <nav aria-label="Primary" className="hidden items-center gap-6 md:flex">

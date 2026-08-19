@@ -16,15 +16,33 @@ import { logger } from './logger';
  * deterministic on-platform scaffold so the feature works everywhere.
  */
 
-export type AssistantTask = 'abstract' | 'title' | 'improve' | 'questions' | 'keywords' | 'summary';
+export type AssistantTask =
+  | 'abstract'
+  | 'title'
+  | 'improve'
+  | 'proofread'
+  | 'paraphrase'
+  | 'questions'
+  | 'keywords'
+  | 'summary'
+  | 'outline'
+  | 'cover_letter'
+  | 'reviewer_response'
+  | 'refine';
 
 export const ASSISTANT_TASKS: readonly AssistantTask[] = [
   'abstract',
   'title',
   'improve',
+  'proofread',
+  'paraphrase',
   'questions',
   'keywords',
   'summary',
+  'outline',
+  'cover_letter',
+  'reviewer_response',
+  'refine',
 ] as const;
 
 const INSTRUCTIONS: Record<AssistantTask, string> = {
@@ -33,22 +51,42 @@ const INSTRUCTIONS: Record<AssistantTask, string> = {
   title:
     'Propose 5 clear, specific, publishable title options for the work described below. Vary emphasis (descriptive vs. finding-led). Return a numbered list only.',
   improve:
-    'Rewrite the passage below in clear, concise, formal academic English. Preserve every claim and its meaning exactly; do not add new claims, citations, or data. Return only the improved passage.',
+    'Rewrite the passage below in clear, concise, formal academic English, improving structure and flow. Preserve every claim and its meaning exactly; do not add new claims, citations, or data. Return only the improved passage.',
+  proofread:
+    'Correct grammar, spelling, punctuation, verb tense, articles, and word choice in the passage below. This author may be writing in English as a second language: fix errors and awkward phrasing but do NOT restructure sound sentences, change correct wording, or alter meaning. Preserve all technical terms. Return only the corrected passage.',
+  paraphrase:
+    'Rewrite the passage below using different wording and sentence structure while preserving its exact meaning and every claim. Improve clarity and flow. Do not add or remove information, citations, or data. Return only the rewritten passage.',
   questions:
     'Propose 6 focused research questions and 3 candidate hypotheses the author could investigate in the area described below. Frame them as open questions to pursue, never as findings. Group as "Research questions" and "Hypotheses".',
   keywords:
     'Suggest 8–12 indexing keywords and 2–3 subject classifications for the work below, ordered most to least central, to maximize discoverability. Return keywords as a comma-separated line, then classifications on a second line.',
   summary:
     'Write a 2–3 sentence plain-language summary of the work below for a non-specialist audience, preserving the author’s meaning and adding no new claims.',
+  outline:
+    'Produce a structured outline for a research paper on the work described below, following IMRaD (Introduction, Methods, Results, Discussion, and a brief Conclusion). Under each heading give 2–4 concise bullet points on what the author should cover. Do not invent findings — mark places for the author’s own results or data with [YOUR DATA]. Return the outline only.',
+  cover_letter:
+    'Draft a concise, professional cover letter to a journal editor for the manuscript described below. Include: one sentence on what the paper reports, why it matters and fits the journal, and a standard closing affirming the work is original and not under review elsewhere. Use placeholders [JOURNAL], [EDITOR], and [AUTHOR] where specifics are not given. Do not invent findings, metrics, or citations. Return only the letter.',
+  reviewer_response:
+    'Draft a courteous, point-by-point response to the reviewer comments below. For each comment: restate it briefly, then give a constructive, non-defensive response describing the change the author will make. Where the author’s intended change or supporting evidence is not provided, insert [DESCRIBE CHANGE] or [ADD EVIDENCE]. Do not invent results, numbers, or citations. Return the response only.',
+  // `refine` is directive-driven — the instruction is composed at runtime from
+  // the user's follow-up request (see runAssistantTask).
+  refine:
+    'Revise the passage below as instructed. Preserve all factual claims and meaning; add no new claims, citations, or data. Return only the revised text.',
 };
 
 const MIN_MATERIAL: Record<AssistantTask, number> = {
   abstract: 20,
   title: 20,
   improve: 30,
+  proofread: 30,
+  paraphrase: 30,
   questions: 8,
   keywords: 20,
   summary: 30,
+  outline: 20,
+  cover_letter: 20,
+  reviewer_response: 30,
+  refine: 10,
 };
 
 const DISCLAIMER =
@@ -125,7 +163,50 @@ export function offlineAssist(task: AssistantTask, material: string): string {
       return lines.join('\n');
     }
     case 'improve':
+    case 'proofread':
+    case 'paraphrase':
+    case 'refine':
       return m; // never silently alter the author's meaning offline
+    case 'outline':
+      return [
+        'Paper outline (IMRaD scaffold — expand each point from your work):',
+        'Introduction — background, gap, aim/contribution',
+        'Methods — design, participants/data, procedure, analysis',
+        'Results — [YOUR DATA]; key findings in order',
+        'Discussion — interpretation, comparison to prior work, limitations',
+        'Conclusion — takeaway and future work',
+        '',
+        'Your notes:',
+        m,
+      ].join('\n');
+    case 'cover_letter':
+      return [
+        'Dear [EDITOR],',
+        '',
+        'Please consider our manuscript for publication in [JOURNAL].',
+        '(One sentence on what the paper reports — from your notes below.)',
+        '(One sentence on why it fits the journal and matters.)',
+        '',
+        'We confirm the work is original and not under consideration elsewhere.',
+        '',
+        'Sincerely,',
+        '[AUTHOR]',
+        '',
+        'Your notes:',
+        m,
+      ].join('\n');
+    case 'reviewer_response':
+      return [
+        'Response to reviewers (fill each response from your intended changes):',
+        '',
+        'Reviewer comment 1: (paste)',
+        'Response: [DESCRIBE CHANGE]',
+        '',
+        '(Enable the full AI provider for a drafted point-by-point response.)',
+        '',
+        'Reviewer comments provided:',
+        m,
+      ].join('\n');
     case 'abstract':
       return [
         'Abstract scaffold (fill each line from your key points):',
@@ -162,7 +243,14 @@ function cap(s: string): string {
 async function authorFacts(researcherId: string, client: PrismaClient): Promise<GroundedFact[]> {
   const researcher = await client.researcher.findUnique({
     where: { id: researcherId },
-    include: { interests: { orderBy: { label: 'asc' }, take: 12 } },
+    include: {
+      interests: { orderBy: { label: 'asc' }, take: 12 },
+      affiliations: {
+        where: { isPrimary: true },
+        include: { institution: { select: { name: true } } },
+        take: 1,
+      },
+    },
   });
   if (!researcher) throw notFound('Researcher not found');
   const facts: GroundedFact[] = [];
@@ -171,6 +259,14 @@ async function authorFacts(researcherId: string, client: PrismaClient): Promise<
       ref: 'interests',
       kind: 'interest',
       text: `The author lists research interests: ${researcher.interests.map((i) => i.label).join(', ')}`,
+    });
+  }
+  const primary = researcher.affiliations[0]?.institution?.name;
+  if (primary || researcher.academicRank) {
+    facts.push({
+      ref: 'author',
+      kind: 'profile',
+      text: `The author is ${researcher.academicRank ?? 'a researcher'}${primary ? ` at ${primary}` : ''} (use only if relevant, e.g. a cover-letter signature).`,
     });
   }
   return facts;
@@ -194,7 +290,7 @@ function resolveProvider() {
  */
 export async function runAssistantTask(
   researcherId: string,
-  input: { task: AssistantTask; material: string },
+  input: { task: AssistantTask; material: string; directive?: string },
   client: PrismaClient = prisma,
 ): Promise<AssistantResult> {
   const task = input.task;
@@ -204,6 +300,16 @@ export async function runAssistantTask(
     throw badRequest(`Please provide a bit more detail (at least ${MIN_MATERIAL[task]} characters).`);
   }
   if (material.length > 8000) throw badRequest('Material is too long (max 8000 characters).');
+
+  // `refine` composes its instruction from the user's follow-up directive.
+  const directive = (input.directive ?? '').trim().slice(0, 300);
+  if (task === 'refine' && directive.length < 2) {
+    throw badRequest('Tell the assistant how to revise it (e.g. “make it shorter”).');
+  }
+  const instruction =
+    task === 'refine'
+      ? `Revise the passage below according to this instruction: "${directive}". Preserve all factual claims and meaning; add no new claims, citations, or data. Return only the revised text.`
+      : INSTRUCTIONS[task];
 
   const facts = await authorFacts(researcherId, client);
   const { provider, fellBack } = resolveProvider();
@@ -225,7 +331,7 @@ export async function runAssistantTask(
   const ctx: GroundedContext = {
     task: `assist:${task}`,
     mode: 'assist',
-    instruction: INSTRUCTIONS[task],
+    instruction,
     facts,
     material,
     containsPrivate: false,

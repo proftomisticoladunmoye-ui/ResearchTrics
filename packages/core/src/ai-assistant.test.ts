@@ -45,10 +45,48 @@ describe('offlineAssist (deterministic, no fabrication)', () => {
     const out = offlineAssist('summary', 'First sentence here. Second sentence here. Third one.');
     expect(out).toContain('First sentence here.');
   });
+
+  it('proofread and paraphrase never silently alter meaning offline', () => {
+    const text = 'The intervention reduced anxiety scores in the sample.';
+    expect(offlineAssist('proofread', text)).toBe(text);
+    expect(offlineAssist('paraphrase', text)).toBe(text);
+    expect(offlineAssist('refine', text)).toBe(text);
+  });
+
+  it('outline returns an IMRaD scaffold with a data placeholder, no invented findings', () => {
+    const out = offlineAssist('outline', 'We evaluated a mobile clinic across five districts.');
+    expect(out).toMatch(/Introduction/);
+    expect(out).toMatch(/Methods/);
+    expect(out).toMatch(/\[YOUR DATA\]/);
+  });
+
+  it('cover_letter is a placeholdered template, not invented specifics', () => {
+    const out = offlineAssist('cover_letter', 'A study of maternal health outcomes.');
+    expect(out).toMatch(/\[JOURNAL\]/);
+    expect(out).toMatch(/\[AUTHOR\]/);
+  });
+
+  it('reviewer_response is a placeholdered template', () => {
+    const out = offlineAssist('reviewer_response', 'Reviewer 1: the sample is small.');
+    expect(out).toMatch(/\[DESCRIBE CHANGE\]/);
+  });
 });
 
 describe('ASSISTANT_TASKS', () => {
-  it('covers the intended writing tasks', () => {
-    expect(ASSISTANT_TASKS).toEqual(['abstract', 'title', 'improve', 'questions', 'keywords', 'summary']);
+  it('covers the full research-writing suite', () => {
+    expect(ASSISTANT_TASKS).toEqual([
+      'abstract',
+      'title',
+      'improve',
+      'proofread',
+      'paraphrase',
+      'questions',
+      'keywords',
+      'summary',
+      'outline',
+      'cover_letter',
+      'reviewer_response',
+      'refine',
+    ]);
   });
 });

@@ -44,7 +44,9 @@ export default async function AssistantPage() {
           <Badge variant="gold">New</Badge>
         </div>
         <p className="mt-1 text-xs text-rt-muted">
-          Abstracts, titles, clearer prose, research questions, keywords, and lay summaries.
+          Abstracts, titles &amp; outlines · proofreading, paraphrasing &amp; language polish ·
+          cover letters &amp; reviewer responses · keywords, questions &amp; lay summaries — then
+          refine any result in one tap.
         </p>
         <div className="mt-3">
           <AssistantConsole />

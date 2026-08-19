@@ -23,13 +23,18 @@ export async function POST(req: NextRequest) {
     if (!user?.researcher) throw unauthorized('Sign in as a researcher to use the AI Assistant');
     await enforceRateLimit('assistant', `user:${user.researcher.id}`);
 
-    const body = (await req.json().catch(() => ({}))) as { task?: string; material?: string };
+    const body = (await req.json().catch(() => ({}))) as {
+      task?: string;
+      material?: string;
+      directive?: string;
+    };
     const task = body.task as AssistantTask | undefined;
     if (!task || !ASSISTANT_TASKS.includes(task)) throw badRequest('Choose a valid assistant task');
 
     const result = await runAssistantTask(user.researcher.id, {
       task,
       material: String(body.material ?? ''),
+      directive: body.directive ? String(body.directive) : undefined,
     });
     return ok(result);
   } catch (err) {

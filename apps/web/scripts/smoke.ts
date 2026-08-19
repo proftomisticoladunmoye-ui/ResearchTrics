@@ -237,6 +237,30 @@ async function main() {
     });
     check('assistant rejects material that is too thin (BAD_REQUEST)', tooShort);
 
+    // New tasks: outline scaffold + reviewer response (on-platform, no fabrication).
+    const outline = await core.runAssistantTask(reg.researcher.id, {
+      task: 'outline',
+      material: 'We evaluated a community health worker programme across five rural districts.',
+    });
+    check(
+      'outline produces an IMRaD structure without inventing findings',
+      !outline.external ? /Methods|Introduction/i.test(outline.text) : outline.text.length > 0,
+    );
+    // refine requires a directive; missing one is rejected.
+    let refineNeedsDirective = false;
+    await core
+      .runAssistantTask(reg.researcher.id, { task: 'refine', material: 'A passage to revise here.' })
+      .catch(() => {
+        refineNeedsDirective = true;
+      });
+    check('refine requires a revision directive (BAD_REQUEST)', refineNeedsDirective);
+    const refined = await core.runAssistantTask(reg.researcher.id, {
+      task: 'refine',
+      material: 'The intervention reduced anxiety scores in the sample of participants.',
+      directive: 'make it shorter',
+    });
+    check('refine runs with a directive and returns text', refined.text.length > 0 && !!refined.disclaimer);
+
     console.log('\nInstitutional platform (tenant-scoped, grounded)');
     const institution = await core.findOrCreateInstitutionByName('Smoke University', { country: 'GB' });
     await core.addAffiliation({ researcherId: reg.researcher.id, institutionId: institution.id, verified: true });

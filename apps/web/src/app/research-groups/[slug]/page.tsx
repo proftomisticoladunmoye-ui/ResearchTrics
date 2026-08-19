@@ -54,7 +54,7 @@ export default async function GroupPage({ params }: { params: Promise<{ slug: st
           <li key={m.id}>
             <Link href={`/researchers/${m.researcher.slug}`}>
               <Card className="flex items-center gap-3 p-4 transition-colors hover:bg-rt-blue-light">
-                <Avatar name={m.researcher.displayName} size="sm" />
+                <Avatar name={m.researcher.displayName} src={m.researcher.photoUrl ?? undefined} size="sm" />
                 <div className="min-w-0">
                   <p className="truncate font-medium text-rt-text">{m.researcher.displayName}</p>
                   <p className="truncate text-sm text-rt-muted">{m.role ?? m.researcher.academicRank ?? 'Member'}</p>

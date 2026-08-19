@@ -1,7 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getResearcherBySlug, getResearcherAnalytics, isAdmin } from '@researchtrics/core';
+import {
+  getResearcherBySlug,
+  getResearcherAnalytics,
+  listResearcherPublications,
+  isAdmin,
+} from '@researchtrics/core';
 import {
   Avatar,
   Badge,
@@ -71,7 +76,10 @@ export default async function ResearcherProfilePage({
 
   // Record a profile view (not for the owner viewing their own page; bots filtered).
   if (!isOwner) await track('profile_view', 'researcher', r.id);
-  const analytics = await getResearcherAnalytics(r.id);
+  const [analytics, publications] = await Promise.all([
+    getResearcherAnalytics(r.id),
+    listResearcherPublications(r.id, { take: 100 }),
+  ]);
 
   const orcid = r.orcidConnection?.orcid ?? r.identifiers.find((i) => i.scheme === 'orcid')?.value;
   const primaryAffiliation = r.affiliations.find((a) => a.isPrimary) ?? r.affiliations[0];
@@ -204,6 +212,75 @@ export default async function ResearcherProfilePage({
               </ul>
             </section>
           ) : null}
+
+          {/* Publications — the heart of the profile (Spec §8, §11) */}
+          <section className="mt-8">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold text-rt-text">
+                Publications{publications.length ? ` (${publications.length})` : ''}
+              </h2>
+              {isOwner ? (
+                <Link href="/dashboard/publications" className="text-sm text-rt-blue hover:underline">
+                  Add / manage →
+                </Link>
+              ) : null}
+            </div>
+
+            {publications.length === 0 ? (
+              <p className="mt-3 text-sm text-rt-muted">
+                {isOwner ? (
+                  <>
+                    No publications yet.{' '}
+                    <Link href="/dashboard/publications" className="text-rt-blue hover:underline">
+                      Import by DOI or add one
+                    </Link>
+                    .
+                  </>
+                ) : (
+                  'No public publications recorded yet.'
+                )}
+              </p>
+            ) : (
+              <ul className="mt-4 divide-y divide-rt-border">
+                {publications.map((p) => (
+                  <li key={p.id} className="py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <Link
+                          href={`/publications/${p.slug}`}
+                          className="font-medium text-rt-blue hover:underline"
+                        >
+                          {p.title}
+                        </Link>
+                        <p className="mt-0.5 text-sm text-rt-muted">
+                          {p.venue ? `${p.venue}` : p.outputType.replace(/_/g, ' ')}
+                          {p.year ? ` · ${p.year}` : ''}
+                          {p.doi ? (
+                            <>
+                              {' · '}
+                              <a
+                                href={`https://doi.org/${p.doi}`}
+                                target="_blank"
+                                rel="noopener noreferrer nofollow"
+                                className="hover:underline"
+                              >
+                                DOI
+                              </a>
+                            </>
+                          ) : null}
+                        </p>
+                      </div>
+                      {p.citationCount != null && p.citationCount > 0 ? (
+                        <span className="shrink-0 text-xs text-rt-muted" title="Citations (max across sources)">
+                          {p.citationCount} cite{p.citationCount === 1 ? '' : 's'}
+                        </span>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
 
         <aside className="space-y-6">

@@ -900,6 +900,19 @@ async function main() {
     const profile = await core.getResearcherBySlug(reg.researcher.slug);
     check('researcher profile loads by slug', profile?.researchtricsId === reg.researcher.researchtricsId);
 
+    console.log('\nProfile publications + avatars (§8, §11)');
+    const profilePubs = await core.listResearcherPublications(reg.researcher.id, { take: 100 });
+    check(
+      'profile lists the researcher\'s public publications, newest first',
+      profilePubs.length >= 1 && profilePubs.every((p) => !!p.title && !!p.slug),
+      `count=${profilePubs.length}`,
+    );
+    const listed = await core.listResearchers({ take: 5 });
+    check(
+      'researcher listing exposes photoUrl for avatars',
+      listed.items.length >= 1 && 'photoUrl' in listed.items[0]!,
+    );
+
     await prisma.$disconnect();
   } finally {
     // embedded-postgres deletes its data dir on stop; on Windows a lingering

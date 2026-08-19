@@ -33,7 +33,7 @@ export async function getInstitutionBySlug(slug: string, client: PrismaClient = 
         where: { researcher: { deletedAt: null, profileVisibility: 'public' } },
         include: {
           researcher: {
-            select: { id: true, displayName: true, slug: true, academicRank: true },
+            select: { id: true, displayName: true, slug: true, academicRank: true, photoUrl: true },
           },
         },
         take: 100,

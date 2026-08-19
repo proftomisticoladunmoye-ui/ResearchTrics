@@ -38,7 +38,7 @@ const groupInclude = {
   institution: { select: { slug: true, name: true } },
   lead: { select: { slug: true, displayName: true } },
   members: {
-    include: { researcher: { select: { slug: true, displayName: true, academicRank: true } } },
+    include: { researcher: { select: { slug: true, displayName: true, academicRank: true, photoUrl: true } } },
     orderBy: { joinedAt: 'asc' },
   },
 } satisfies Prisma.ResearchGroupInclude;

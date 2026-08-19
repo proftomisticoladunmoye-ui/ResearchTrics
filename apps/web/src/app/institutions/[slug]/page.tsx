@@ -69,7 +69,7 @@ export default async function InstitutionPage({
                 <li key={a.id}>
                   <Link href={`/researchers/${a.researcher.slug}`}>
                     <Card className="flex items-center gap-3 p-4 transition-colors hover:bg-rt-blue-light">
-                      <Avatar name={a.researcher.displayName} size="sm" />
+                      <Avatar name={a.researcher.displayName} src={a.researcher.photoUrl ?? undefined} size="sm" />
                       <div className="min-w-0">
                         <p className="truncate font-medium text-rt-text">
                           {a.researcher.displayName}

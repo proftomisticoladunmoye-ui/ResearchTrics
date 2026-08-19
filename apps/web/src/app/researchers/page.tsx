@@ -45,7 +45,7 @@ export default async function ResearchersPage({
             <li key={r.id}>
               <Link href={`/researchers/${r.slug}`}>
                 <Card className="flex items-center gap-4 p-5 transition-colors hover:bg-rt-blue-light">
-                  <Avatar name={r.displayName} />
+                  <Avatar name={r.displayName} src={r.photoUrl ?? undefined} />
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-rt-text">{r.displayName}</p>
                     <p className="truncate text-sm text-rt-muted">

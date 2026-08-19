@@ -151,7 +151,7 @@ export default async function ResearcherNetworkPage({
     <div className="mx-auto max-w-4xl px-4 py-12">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Avatar name={researcher.displayName} />
+          <Avatar name={researcher.displayName} src={researcher.photoUrl ?? undefined} />
           <div>
             <h1 className="text-2xl font-semibold text-rt-text">{researcher.displayName}</h1>
             <p className="text-sm text-rt-muted">Research network</p>

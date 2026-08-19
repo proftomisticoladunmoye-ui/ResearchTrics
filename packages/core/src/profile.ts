@@ -38,6 +38,64 @@ export async function getResearcherByUserId(
   });
 }
 
+/** One publication as shown on a researcher's profile. */
+export interface ProfilePublication {
+  id: string;
+  slug: string;
+  title: string;
+  year: number | null;
+  venue: string | null;
+  outputType: string;
+  doi: string | null;
+  citationCount: number | null;
+  /** How the authorship is evidenced — a claimed link vs. an auto-discovered one. */
+  claimed: boolean;
+}
+
+/**
+ * List a researcher's public publications for their profile, newest first, each
+ * with its venue, year, and best-available citation count. Only public,
+ * non-deleted works are returned (Spec §36).
+ */
+export async function listResearcherPublications(
+  researcherId: string,
+  opts: { take?: number } = {},
+  client: PrismaClient = prisma,
+): Promise<ProfilePublication[]> {
+  const authorships = await client.publicationAuthor.findMany({
+    where: { researcherId, publication: { deletedAt: null, visibility: 'public' } },
+    include: {
+      publication: {
+        include: {
+          journal: { select: { name: true } },
+          citationCounts: { select: { count: true } },
+          identifiers: { where: { scheme: 'doi' }, select: { value: true }, take: 1 },
+        },
+      },
+    },
+    orderBy: [{ publication: { publishedYear: 'desc' } }, { publication: { title: 'asc' } }],
+    take: opts.take ?? 100,
+  });
+
+  return authorships.map((a) => {
+    const p = a.publication;
+    const citationCount = p.citationCounts.length
+      ? Math.max(...p.citationCounts.map((c) => c.count))
+      : null;
+    return {
+      id: p.id,
+      slug: p.slug,
+      title: p.title,
+      year: p.publishedYear,
+      venue: p.journal?.name ?? null,
+      outputType: p.outputType,
+      doi: p.identifiers[0]?.value ?? null,
+      citationCount,
+      claimed: a.matchConfidence === 1,
+    };
+  });
+}
+
 export interface ProfileUpdate {
   displayName?: string;
   givenNames?: string | null;
@@ -104,7 +162,7 @@ export interface ListResearchersParams {
 export async function listResearchers(
   params: ListResearchersParams = {},
   client: PrismaClient = prisma,
-): Promise<{ items: Array<Pick<ResearcherProfile, 'id' | 'displayName' | 'slug' | 'researchtricsId' | 'country' | 'academicRank' | 'verificationLevel'>>; total: number }> {
+): Promise<{ items: Array<Pick<ResearcherProfile, 'id' | 'displayName' | 'slug' | 'researchtricsId' | 'country' | 'academicRank' | 'verificationLevel' | 'photoUrl'>>; total: number }> {
   const take = Math.min(params.take ?? 20, 100);
   const skip = params.skip ?? 0;
   const where: Prisma.ResearcherWhereInput = {
@@ -134,6 +192,7 @@ export async function listResearchers(
         country: true,
         academicRank: true,
         verificationLevel: true,
+        photoUrl: true,
       },
     }),
     client.researcher.count({ where }),

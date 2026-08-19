@@ -29,6 +29,7 @@ export * from './ai-assistant';
 export * from './institution-portal';
 export * from './opportunities';
 export * from './opportunity-sources';
+export * from './blog';
 export * from './graph';
 export * from './discovery';
 export * from './openalex-works';

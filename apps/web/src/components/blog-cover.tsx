@@ -1,4 +1,4 @@
-import { COVER_GRADIENT, type BlogPost } from '@/lib/blog';
+import { coverGradient } from '@/lib/blog';
 
 /**
  * A blog post's display picture. Uses a real cover image when one is provided,
@@ -6,21 +6,25 @@ import { COVER_GRADIENT, type BlogPost } from '@/lib/blog';
  * consistent visual across the blog and the Discover sidebar.
  */
 export function BlogCover({
-  post,
+  title,
+  tone,
+  image,
   className = '',
   rounded = 'rounded-lg',
 }: {
-  post: Pick<BlogPost, 'title' | 'tone' | 'image'>;
+  title: string;
+  tone: string;
+  image?: string | null;
   className?: string;
   rounded?: string;
 }) {
-  if (post.image) {
-    return <img src={post.image} alt={post.title} className={`${rounded} object-cover ${className}`} />;
+  if (image) {
+    return <img src={image} alt={title} className={`${rounded} object-cover ${className}`} />;
   }
   return (
     <div
       aria-hidden
-      className={`flex items-center justify-center bg-gradient-to-br ${COVER_GRADIENT[post.tone]} ${rounded} ${className}`}
+      className={`flex items-center justify-center bg-gradient-to-br ${coverGradient(tone)} ${rounded} ${className}`}
     >
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="opacity-90">
         <path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" />

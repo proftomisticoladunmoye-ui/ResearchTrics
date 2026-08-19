@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Card } from '@researchtrics/ui';
-import { getAllPosts } from '@/lib/blog';
+import { listPublishedBlogPosts } from '@researchtrics/core';
 import { BlogCover } from '@/components/blog-cover';
 
 /**
@@ -47,8 +47,8 @@ function Tile({ icon, gradient }: { icon: ReactNode; gradient: string }) {
   );
 }
 
-export function DiscoverSidebar() {
-  const posts = getAllPosts().slice(0, 2);
+export async function DiscoverSidebar() {
+  const posts = (await listPublishedBlogPosts()).slice(0, 2);
 
   return (
     <>
@@ -88,7 +88,7 @@ export function DiscoverSidebar() {
           {posts.map((post) => (
             <li key={post.slug}>
               <Link href={`/blog/${post.slug}`} className="flex items-start gap-3 group">
-                <BlogCover post={post} className="h-11 w-16 shrink-0" />
+                <BlogCover title={post.title} tone={post.tone} image={post.coverImage} className="h-11 w-16 shrink-0" />
                 <span className="line-clamp-2 text-sm text-rt-text group-hover:text-rt-blue">{post.title}</span>
               </Link>
             </li>

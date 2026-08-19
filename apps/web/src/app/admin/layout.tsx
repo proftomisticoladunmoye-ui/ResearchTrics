@@ -18,6 +18,7 @@ const ADMIN_NAV = [
   { href: '/admin/scholar', label: 'Scholar Check' },
   { href: '/admin/researchers', label: 'Researchers' },
   { href: '/admin/publications', label: 'Publications' },
+  { href: '/admin/blog', label: 'Blog' },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

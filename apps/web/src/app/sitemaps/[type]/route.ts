@@ -65,11 +65,14 @@ async function buildEntries(type: SitemapType): Promise<SitemapEntry[]> {
       return rows.map((j) => ({ loc: `${appUrl}/journals/${j.slug}`, lastmod: j.updatedAt.toISOString() }));
     }
     case 'blog': {
-      const { getAllPosts } = await import('@/lib/blog');
-      const posts = getAllPosts();
+      const { listPublishedBlogPosts } = await import('@researchtrics/core');
+      const posts = await listPublishedBlogPosts();
       return [
         { loc: `${appUrl}/blog` },
-        ...posts.map((p) => ({ loc: `${appUrl}/blog/${p.slug}`, lastmod: new Date(p.date).toISOString() })),
+        ...posts.map((p) => ({
+          loc: `${appUrl}/blog/${p.slug}`,
+          lastmod: (p.publishedAt ?? p.updatedAt).toISOString(),
+        })),
       ];
     }
   }

@@ -1,5 +1,6 @@
+import Link from 'next/link';
 import { prisma } from '@researchtrics/db';
-import { MetricCard, Card } from '@researchtrics/ui';
+import { MetricCard, Card, Button } from '@researchtrics/ui';
 import { DigestTriggerButton } from '@/components/digest-trigger-button';
 
 export const dynamic = 'force-dynamic';
@@ -30,6 +31,16 @@ export default async function AdminOverviewPage() {
         </p>
         <div className="mt-4">
           <DigestTriggerButton />
+        </div>
+      </Card>
+
+      <Card className="mt-6 p-6">
+        <h2 className="text-base font-semibold text-rt-text">Blog</h2>
+        <p className="mt-1 text-sm text-rt-muted">Author and manage blog posts shown on the public site.</p>
+        <div className="mt-4">
+          <Button asChild size="sm">
+            <Link href="/admin/blog">Manage blog</Link>
+          </Button>
         </div>
       </Card>
     </div>

@@ -331,6 +331,7 @@ model User {
   researcher         Researcher?
   auditLogs          AuditLog[]
   verificationTokens VerificationToken[]
+  blogPosts          BlogPost[]
 
   @@index([status])
   @@map("users")
@@ -1525,4 +1526,26 @@ model Notification {
   @@index([recipientId, readAt])
   @@index([createdAt])
   @@map("notifications")
+}
+
+/// A blog post authored in the admin console (§82). Body is plain paragraphs
+/// separated by blank lines; `tone` selects the branded cover gradient.
+model BlogPost {
+  id          String    @id @default(uuid())
+  slug        String    @unique
+  title       String
+  excerpt     String
+  body        String
+  tone        String    @default("blue")
+  coverImage  String?   @map("cover_image")
+  published   Boolean   @default(false)
+  publishedAt DateTime? @map("published_at")
+  authorId    String?   @map("author_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([published, publishedAt])
+  @@map("blog_posts")
 }

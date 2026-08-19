@@ -7,6 +7,7 @@ import {
   type SearchableType,
 } from '@researchtrics/search';
 import { Card, Input, Button, Badge, Avatar } from '@researchtrics/ui';
+import { DiscoverSidebar } from '@/components/discover-sidebar';
 
 export const metadata: Metadata = {
   title: 'Discover Research',
@@ -112,7 +113,7 @@ export default async function DiscoverPage({
         ))}
       </div>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_240px]">
+      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_264px]">
         <section>
           <p className="text-sm text-rt-muted">{result.total} results</p>
           {result.items.length === 0 ? (
@@ -191,6 +192,8 @@ export default async function DiscoverPage({
               </Button>
             </form>
           </Card>
+
+          <DiscoverSidebar />
         </aside>
       </div>
     </div>

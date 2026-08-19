@@ -64,5 +64,13 @@ async function buildEntries(type: SitemapType): Promise<SitemapEntry[]> {
       const rows = await prisma.journal.findMany({ select: { slug: true, updatedAt: true }, take });
       return rows.map((j) => ({ loc: `${appUrl}/journals/${j.slug}`, lastmod: j.updatedAt.toISOString() }));
     }
+    case 'blog': {
+      const { getAllPosts } = await import('@/lib/blog');
+      const posts = getAllPosts();
+      return [
+        { loc: `${appUrl}/blog` },
+        ...posts.map((p) => ({ loc: `${appUrl}/blog/${p.slug}`, lastmod: new Date(p.date).toISOString() })),
+      ];
+    }
   }
 }

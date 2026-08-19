@@ -171,6 +171,27 @@ export default async function ResearcherProfilePage({
         </div>
       </div>
 
+      {/* Owner toolbar — your tools, right on your profile. */}
+      {isOwner ? (
+        <div className="mt-6 flex flex-wrap gap-2 rounded-lg border border-rt-border bg-rt-blue-light/30 p-3">
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/dashboard/profile">Edit profile</Link>
+          </Button>
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/dashboard/publications">Add publication</Link>
+          </Button>
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/dashboard/assistant">AI Assistant</Link>
+          </Button>
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/dashboard/analytics">Analytics</Link>
+          </Button>
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/dashboard/rvm">Visibility (RVM)</Link>
+          </Button>
+        </div>
+      ) : null}
+
       {/* Research snapshot (Spec §8) — counts arrive with later phases. */}
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard label="Publications" value={analytics.publicationCount} />

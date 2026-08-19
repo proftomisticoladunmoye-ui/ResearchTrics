@@ -1,6 +1,7 @@
 import { prisma, type PrismaClient } from '@researchtrics/db';
 import {
   createAIProvider,
+  LocalProvider,
   type AIGeneration,
   type GroundedContext,
   type GroundedFact,
@@ -219,17 +220,24 @@ export function extractExpertise(input: {
 // ---------- Provider resolution ----------
 
 function resolveProvider() {
-  const env = loadServerEnv();
-  const { provider, fellBack } = createAIProvider({
-    provider: env.AI_PROVIDER,
-    apiKey: env.AI_API_KEY,
-    model: env.AI_MODEL,
-    baseUrl: env.AI_BASE_URL,
-  });
-  if (fellBack) {
-    logger.warn('An external AI_PROVIDER was set but AI_API_KEY is unset — using the on-platform provider');
+  // A malformed AI_* env var makes loadServerEnv throw — never let that break the
+  // feature; fall back to the on-platform provider.
+  try {
+    const env = loadServerEnv();
+    const { provider, fellBack } = createAIProvider({
+      provider: env.AI_PROVIDER,
+      apiKey: env.AI_API_KEY,
+      model: env.AI_MODEL,
+      baseUrl: env.AI_BASE_URL,
+    });
+    if (fellBack) {
+      logger.warn('An external AI_PROVIDER was set but AI_API_KEY is unset — using the on-platform provider');
+    }
+    return { provider, fellBack };
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, 'AI env invalid — using on-platform provider');
+    return { provider: new LocalProvider(), fellBack: true };
   }
-  return { provider, fellBack };
 }
 
 // ---------- Profile summarization ----------

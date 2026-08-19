@@ -1,5 +1,5 @@
 import { prisma, type PrismaClient } from '@researchtrics/db';
-import { createAIProvider, type GroundedContext, type GroundedFact } from '@researchtrics/ai';
+import { createAIProvider, LocalProvider, type GroundedContext, type GroundedFact } from '@researchtrics/ai';
 import { loadServerEnv } from '@researchtrics/config';
 import { badRequest, notFound } from './errors';
 import { logger } from './logger';
@@ -273,14 +273,22 @@ async function authorFacts(researcherId: string, client: PrismaClient): Promise<
 }
 
 function resolveProvider() {
-  const env = loadServerEnv();
-  const { provider, fellBack } = createAIProvider({
-    provider: env.AI_PROVIDER,
-    apiKey: env.AI_API_KEY,
-    model: env.AI_MODEL,
-    baseUrl: env.AI_BASE_URL,
-  });
-  return { provider, fellBack };
+  // A malformed AI_* env var makes loadServerEnv throw. That must never 500 the
+  // assistant — fall back to the on-platform provider (labelled, so the badge
+  // shows "on-platform") instead of failing the request.
+  try {
+    const env = loadServerEnv();
+    const { provider, fellBack } = createAIProvider({
+      provider: env.AI_PROVIDER,
+      apiKey: env.AI_API_KEY,
+      model: env.AI_MODEL,
+      baseUrl: env.AI_BASE_URL,
+    });
+    return { provider, fellBack };
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, 'AI env invalid — using on-platform provider');
+    return { provider: new LocalProvider(), fellBack: true };
+  }
 }
 
 /**

@@ -88,12 +88,15 @@ export default async function ResearcherProfilePage({
     '@context': 'https://schema.org',
     '@type': 'Person',
     name: r.displayName,
-    ...(r.biography ? { description: r.biography } : {}),
+    ...(r.academicRank ? { jobTitle: r.academicRank } : {}),
+    ...(r.biography ? { description: r.biography } : r.aiSummary ? { description: r.aiSummary } : {}),
     ...(orcid ? { identifier: `https://orcid.org/${orcid}`, sameAs: `https://orcid.org/${orcid}` } : {}),
+    ...(r.interests.length ? { knowsAbout: r.interests.map((i) => i.label) } : {}),
     ...(primaryAffiliation
       ? { affiliation: { '@type': 'Organization', name: primaryAffiliation.institution.name } }
       : {}),
-    url: `${appUrl}/researchers/${r.slug}`,
+    ...(r.website ? { url: r.website } : {}),
+    mainEntityOfPage: `${appUrl}/researchers/${r.slug}`,
   };
 
   return (

@@ -32,7 +32,13 @@ async function buildEntries(type: SitemapType): Promise<SitemapEntry[]> {
   switch (type) {
     case 'researchers': {
       const rows = await prisma.researcher.findMany({
-        where: { deletedAt: null, profileVisibility: 'public' },
+        // Suppressed (removal-requested) and merged (deduplicated) profiles must
+        // not be advertised to crawlers.
+        where: {
+          deletedAt: null,
+          profileVisibility: 'public',
+          profileStatus: { notIn: ['suppressed', 'merged'] },
+        },
         select: { slug: true, updatedAt: true },
         take,
       });

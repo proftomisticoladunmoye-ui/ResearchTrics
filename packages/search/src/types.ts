@@ -39,6 +39,8 @@ export interface SearchHit {
   title: string;
   subtitle?: string;
   url: string;
+  /** Optional thumbnail (e.g. a researcher's photo or an institution logo). */
+  imageUrl?: string | null;
   score: number;
   meta?: Record<string, string | number | boolean | null>;
 }

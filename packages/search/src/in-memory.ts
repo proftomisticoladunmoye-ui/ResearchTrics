@@ -60,6 +60,7 @@ export class InMemorySearchIndex implements SearchIndex {
       title: x.d.title,
       ...(x.d.subtitle ? { subtitle: x.d.subtitle } : {}),
       url: x.d.url,
+      ...(x.d.imageUrl ? { imageUrl: x.d.imageUrl } : {}),
       score: x.score,
       ...(x.d.meta ? { meta: x.d.meta } : {}),
     }));

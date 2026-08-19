@@ -6,7 +6,7 @@ import {
   SEARCHABLE_TYPES,
   type SearchableType,
 } from '@researchtrics/search';
-import { Card, Input, Button, Badge } from '@researchtrics/ui';
+import { Card, Input, Button, Badge, Avatar } from '@researchtrics/ui';
 
 export const metadata: Metadata = {
   title: 'Discover Research',
@@ -123,11 +123,16 @@ export default async function DiscoverPage({
                 <li key={`${hit.type}-${hit.id}`}>
                   <Card className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <Link href={hit.url} className="font-medium text-rt-blue hover:underline">
-                          {hit.title}
-                        </Link>
-                        {hit.subtitle ? <p className="text-sm text-rt-muted">{hit.subtitle}</p> : null}
+                      <div className="flex min-w-0 items-start gap-3">
+                        {hit.type === 'researcher' ? (
+                          <Avatar name={hit.title} src={hit.imageUrl ?? undefined} size="sm" />
+                        ) : null}
+                        <div className="min-w-0">
+                          <Link href={hit.url} className="font-medium text-rt-blue hover:underline">
+                            {hit.title}
+                          </Link>
+                          {hit.subtitle ? <p className="text-sm text-rt-muted">{hit.subtitle}</p> : null}
+                        </div>
                       </div>
                       <Badge variant="outline">{TYPE_BADGE[hit.type]}</Badge>
                     </div>

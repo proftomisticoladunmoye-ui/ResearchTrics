@@ -81,7 +81,7 @@ export class PostgresSearchIndex implements SearchIndex {
         const rows = await this.db.researcher.findMany({
           where: this.researcherWhere(q, f),
           take,
-          select: { id: true, displayName: true, slug: true, academicRank: true, country: true, verificationLevel: true },
+          select: { id: true, displayName: true, slug: true, academicRank: true, country: true, verificationLevel: true, photoUrl: true },
         });
         return rows.map((r) => ({
           type,
@@ -89,6 +89,7 @@ export class PostgresSearchIndex implements SearchIndex {
           title: r.displayName,
           ...(r.academicRank || r.country ? { subtitle: [r.academicRank, r.country].filter(Boolean).join(' · ') } : {}),
           url: `/researchers/${r.slug}`,
+          imageUrl: r.photoUrl,
           score: relevanceScore(r.displayName, q) || 0.3,
           meta: { verificationLevel: r.verificationLevel },
         }));

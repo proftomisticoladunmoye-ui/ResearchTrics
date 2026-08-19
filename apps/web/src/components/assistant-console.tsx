@@ -111,6 +111,7 @@ interface AssistantResult {
   model: string;
   external: boolean;
   offline: boolean;
+  diagnostic?: string;
   disclaimer: string;
 }
 
@@ -252,10 +253,15 @@ export function AssistantConsole() {
           </div>
 
           {result.offline ? (
-            <p className="mt-2 text-xs text-rt-muted">
-              This is the on-platform scaffold. Ask an administrator to enable the full AI provider
-              for complete drafting.
-            </p>
+            <div className="mt-2 text-xs text-rt-muted">
+              <p>
+                This is the on-platform scaffold. Ask an administrator to enable the full AI provider
+                for complete drafting.
+              </p>
+              {result.diagnostic ? (
+                <p className="mt-1 font-mono text-rt-error">Provider status: {result.diagnostic}</p>
+              ) : null}
+            </div>
           ) : (
             // Iterative refine — only meaningful with the full provider.
             <div className="mt-3 flex flex-wrap items-center gap-2">

@@ -104,6 +104,8 @@ export interface AssistantResult {
   fellBack: boolean;
   /** True when this is the deterministic on-platform scaffold, not full drafting. */
   offline: boolean;
+  /** When it fell back to on-platform, a short reason (env/key/provider issue). */
+  diagnostic?: string;
   disclaimer: string;
 }
 
@@ -272,10 +274,11 @@ async function authorFacts(researcherId: string, client: PrismaClient): Promise<
   return facts;
 }
 
-function resolveProvider() {
+function resolveProvider(): { provider: ReturnType<typeof createAIProvider>['provider']; fellBack: boolean; note?: string } {
   // A malformed AI_* env var makes loadServerEnv throw. That must never 500 the
   // assistant — fall back to the on-platform provider (labelled, so the badge
-  // shows "on-platform") instead of failing the request.
+  // shows "on-platform") instead of failing the request. `note` explains WHY we
+  // fell back so the operator can fix the deployment without digging through logs.
   try {
     const env = loadServerEnv();
     const { provider, fellBack } = createAIProvider({
@@ -284,10 +287,18 @@ function resolveProvider() {
       model: env.AI_MODEL,
       baseUrl: env.AI_BASE_URL,
     });
-    return { provider, fellBack };
+    // fellBack here means an external provider was requested but no AI_API_KEY.
+    const note = fellBack
+      ? `AI_PROVIDER=${env.AI_PROVIDER} but AI_API_KEY is missing/empty on this service`
+      : undefined;
+    return { provider, fellBack, note };
   } catch (err) {
     logger.warn({ err: (err as Error).message }, 'AI env invalid — using on-platform provider');
-    return { provider: new LocalProvider(), fellBack: true };
+    return {
+      provider: new LocalProvider(),
+      fellBack: true,
+      note: `AI env rejected: ${(err as Error).message.slice(0, 200)}`,
+    };
   }
 }
 
@@ -320,7 +331,7 @@ export async function runAssistantTask(
       : INSTRUCTIONS[task];
 
   const facts = await authorFacts(researcherId, client);
-  const { provider, fellBack } = resolveProvider();
+  const { provider, fellBack, note } = resolveProvider();
 
   // No external provider → deterministic on-platform scaffold (still useful).
   if (!provider.external) {
@@ -332,6 +343,7 @@ export async function runAssistantTask(
       external: false,
       fellBack,
       offline: true,
+      ...(note ? { diagnostic: note } : {}),
       disclaimer: DISCLAIMER,
     };
   }
@@ -368,6 +380,7 @@ export async function runAssistantTask(
       external: false,
       fellBack,
       offline: true,
+      diagnostic: `provider call failed: ${(err as Error).message.slice(0, 200)}`,
       disclaimer: DISCLAIMER,
     };
   }

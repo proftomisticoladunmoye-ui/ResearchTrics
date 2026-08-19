@@ -194,6 +194,11 @@ function isNetworkError(err: unknown): boolean {
   return /fetch failed/i.test(hay) || codes.some((c) => hay.includes(c));
 }
 
+// Sources persistently unreachable from this host (e.g. a feed that blocks
+// datacenter IPs) are logged ONCE per process, not every run — a handled skip
+// is informational, not a recurring warning.
+const skippedUnreachable = new Set<string>();
+
 /**
  * Ingest opportunities from a legitimate source provider (Spec §20). Idempotent:
  * listings are deduped on `(source, sourceUrl)` so re-runs update in place rather
@@ -214,9 +219,16 @@ export async function ingestOpportunities(
     items = await provider.fetchOpportunities(query);
   } catch (err) {
     // A single unreachable third-party source (e.g. a datacenter-blocked feed)
-    // must not fail the job and trigger a retry storm — skip it this run.
+    // must not fail the job and trigger a retry storm — skip it this run. Log
+    // once per process at info level so it doesn't read as a recurring error.
     if (isNetworkError(err)) {
-      logger.warn({ provider: provider.name, err: (err as Error).message }, 'Opportunity source unreachable — skipped this run');
+      if (!skippedUnreachable.has(provider.name)) {
+        skippedUnreachable.add(provider.name);
+        logger.info(
+          { provider: provider.name },
+          'Opportunity source unreachable from this host — skipping it (other sources unaffected)',
+        );
+      }
       return { source, fetched: 0, created: 0, updated: 0, skipped: true };
     }
     throw err;

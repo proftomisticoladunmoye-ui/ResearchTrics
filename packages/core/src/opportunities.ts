@@ -168,6 +168,30 @@ export interface IngestResult {
   fetched: number;
   created: number;
   updated: number;
+  /** True when the source could not be reached and was skipped (not an error). */
+  skipped?: boolean;
+}
+
+/**
+ * Whether an error is a transient network/connectivity failure to an external
+ * host (DNS, unreachable, refused, reset, timeout, or undici's "fetch failed").
+ * Such failures for a single third-party source must degrade gracefully — they
+ * are not bugs in our code and must never crash-loop the ingestion job.
+ */
+function isNetworkError(err: unknown): boolean {
+  const codes = ['EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'UND_ERR'];
+  const parts: string[] = [];
+  let e: unknown = err;
+  for (let i = 0; i < 5 && e; i++) {
+    if (e instanceof Error) {
+      parts.push(e.message, (e as { code?: string }).code ?? '');
+      e = (e as { cause?: unknown }).cause;
+    } else {
+      break;
+    }
+  }
+  const hay = parts.join(' ');
+  return /fetch failed/i.test(hay) || codes.some((c) => hay.includes(c));
 }
 
 /**
@@ -184,7 +208,20 @@ export async function ingestOpportunities(
   client: PrismaClient = prisma,
 ): Promise<IngestResult> {
   const source = `import:${provider.name}`;
-  const items = await provider.fetchOpportunities(query);
+
+  let items;
+  try {
+    items = await provider.fetchOpportunities(query);
+  } catch (err) {
+    // A single unreachable third-party source (e.g. a datacenter-blocked feed)
+    // must not fail the job and trigger a retry storm — skip it this run.
+    if (isNetworkError(err)) {
+      logger.warn({ provider: provider.name, err: (err as Error).message }, 'Opportunity source unreachable — skipped this run');
+      return { source, fetched: 0, created: 0, updated: 0, skipped: true };
+    }
+    throw err;
+  }
+
   let created = 0;
   let updated = 0;
 

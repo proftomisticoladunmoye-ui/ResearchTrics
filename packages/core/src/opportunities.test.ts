@@ -1,6 +1,38 @@
 import { describe, it, expect } from 'vitest';
-import { scoreOpportunityMatch, canPostOpportunity } from './opportunities';
+import { scoreOpportunityMatch, canPostOpportunity, ingestOpportunities } from './opportunities';
+import type { PrismaClient } from '@researchtrics/db';
 import type { Actor } from './rbac';
+
+describe('ingestOpportunities — resilience to unreachable sources', () => {
+  it('skips (not throws) when a source is network-unreachable, without touching the DB', async () => {
+    const unreachable = {
+      name: 'wikicfp' as const,
+      fetchOpportunities: async () => {
+        const inner = Object.assign(new Error('connect EHOSTUNREACH 97.107.135.119:443'), {
+          code: 'EHOSTUNREACH',
+        });
+        throw Object.assign(new TypeError('fetch failed'), { cause: inner });
+      },
+    };
+    // A client that throws if used — proves we never reach the DB on skip.
+    const client = new Proxy({}, { get() { throw new Error('DB should not be touched'); } }) as unknown as PrismaClient;
+    const res = await ingestOpportunities(unreachable, {}, client);
+    expect(res.skipped).toBe(true);
+    expect(res.fetched).toBe(0);
+    expect(res.created).toBe(0);
+  });
+
+  it('re-throws a non-network error (real bugs must surface)', async () => {
+    const broken = {
+      name: 'wikicfp' as const,
+      fetchOpportunities: async () => {
+        throw new Error('unexpected parse failure');
+      },
+    };
+    const client = new Proxy({}, { get() { throw new Error('unused'); } }) as unknown as PrismaClient;
+    await expect(ingestOpportunities(broken, {}, client)).rejects.toThrow('unexpected parse failure');
+  });
+});
 
 describe('scoreOpportunityMatch (explainable, Spec §29)', () => {
   it('always explains a discipline match', () => {

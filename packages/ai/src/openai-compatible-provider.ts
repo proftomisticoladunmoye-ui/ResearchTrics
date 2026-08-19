@@ -23,6 +23,9 @@ export interface OpenAICompatibleOptions {
   /** Optional attribution headers OpenRouter uses for app ranking. */
   referer?: string;
   title?: string;
+  /** Abort the request after this many ms (default 45000) so a slow/unreachable
+   * upstream fails fast instead of hanging the caller's request. */
+  timeoutMs?: number;
   fetchImpl?: typeof fetch;
 }
 
@@ -39,6 +42,7 @@ export class OpenAICompatibleProvider implements AIProvider {
   private readonly baseUrl: string;
   private readonly referer?: string;
   private readonly title?: string;
+  private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
 
   constructor(opts: OpenAICompatibleOptions) {
@@ -48,6 +52,7 @@ export class OpenAICompatibleProvider implements AIProvider {
     this.name = opts.name ?? 'openrouter';
     if (opts.referer !== undefined) this.referer = opts.referer;
     if (opts.title !== undefined) this.title = opts.title;
+    this.timeoutMs = opts.timeoutMs ?? 45000;
     this.fetchImpl = opts.fetchImpl ?? fetch;
   }
 
@@ -70,19 +75,34 @@ export class OpenAICompatibleProvider implements AIProvider {
     if (this.referer) headers['HTTP-Referer'] = this.referer;
     if (this.title) headers['X-Title'] = this.title;
 
-    const res = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: this.model,
-        max_tokens: mode === 'assist' ? 2000 : 1500,
-        temperature: mode === 'assist' ? 0.4 : 0.2,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-      }),
-    });
+    // Bound the request: a slow or unreachable upstream must fail fast so the
+    // caller can fall back, never hang the user's request indefinitely.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    let res: Awaited<ReturnType<typeof fetch>>;
+    try {
+      res = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers,
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: mode === 'assist' ? 2000 : 1500,
+          temperature: mode === 'assist' ? 0.4 : 0.2,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: user },
+          ],
+        }),
+      });
+    } catch (err) {
+      if (controller.signal.aborted) {
+        throw new Error(`${this.name} request timed out after ${this.timeoutMs}ms`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
 
     if (!res.ok) {
       const detail = await res.text().catch(() => '');

@@ -78,6 +78,22 @@ describe('OpenAICompatibleProvider (injected fetch — offline)', () => {
     expect(url).toBe('https://gateway.example.com/v1/chat/completions');
   });
 
+  it('times out (aborts) a hanging upstream instead of hanging forever', async () => {
+    // A fetch that never resolves until its abort signal fires.
+    const hangingFetch = ((_u: string, init?: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        const sig = init?.signal;
+        if (sig) sig.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      })) as unknown as typeof fetch;
+    const provider = new OpenAICompatibleProvider({
+      apiKey: 'k',
+      model: 'x/y',
+      timeoutMs: 30,
+      fetchImpl: hangingFetch,
+    });
+    await expect(provider.generateGrounded(summaryCtx)).rejects.toThrow('timed out');
+  });
+
   it('throws on a non-ok response', async () => {
     const fakeFetch = (async () => ({ ok: false, status: 429, text: async () => 'rate limited' })) as unknown as typeof fetch;
     const provider = new OpenAICompatibleProvider({ apiKey: 'k', model: 'x/y', fetchImpl: fakeFetch });

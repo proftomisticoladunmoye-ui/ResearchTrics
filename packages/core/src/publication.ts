@@ -420,7 +420,14 @@ export async function listPublications(
       orderBy: [{ publishedYear: 'desc' }, { title: 'asc' }],
       take,
       skip,
-      include: { authors: { orderBy: { authorOrder: 'asc' }, take: 8 }, journal: true },
+      include: {
+        authors: {
+          orderBy: { authorOrder: 'asc' },
+          take: 8,
+          include: { researcher: { select: { slug: true, photoUrl: true } } },
+        },
+        journal: true,
+      },
     }),
     client.publication.count({ where }),
   ]);

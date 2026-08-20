@@ -188,6 +188,21 @@ async function main() {
     const incoming = await core.listIncomingRequests(reg2.researcher.id);
     check('request accepted (no longer pending)', incoming.length === 0);
 
+    console.log('\nFollowing (social edge + notification, §18/§41)');
+    await core.followResearcher(reg.researcher.id, reg2.researcher.id);
+    const st1 = await core.getFollowState(reg2.researcher.id, reg.researcher.id);
+    check('follow creates an edge + follower count', st1.isFollowing && st1.followers >= 1, JSON.stringify(st1));
+    check(
+      'followed researcher is alerted (§41)',
+      (await core.listNotifications(reg2.researcher.id)).some((n) => n.type === 'follow' && /started following you/.test(n.message)),
+    );
+    await core.followResearcher(reg.researcher.id, reg2.researcher.id); // idempotent
+    const st1b = await core.getFollowState(reg2.researcher.id, reg.researcher.id);
+    check('following is idempotent (no duplicate)', st1b.followers === st1.followers);
+    await core.unfollowResearcher(reg.researcher.id, reg2.researcher.id);
+    const st2 = await core.getFollowState(reg2.researcher.id, reg.researcher.id);
+    check('unfollow removes the edge', !st2.isFollowing && st2.followers === st1.followers - 1);
+
     console.log('\nResearch groups');
     const grp = await core.createGroup(reg.researcher.id, { name: 'Psychometrics Lab', interests: 'psychometrics' });
     const groupDetail = await core.getGroupBySlug(grp.slug);

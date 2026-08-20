@@ -1,12 +1,18 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getPublicationBySlug, getEntityMetrics, CITATION_FORMATS, type CitationFormat } from '@researchtrics/core';
-import { Card, Badge, DoiBadge, OpenAccessBadge, Button } from '@researchtrics/ui';
+import { getPublicationBySlug, getEntityMetrics, getFollowState, CITATION_FORMATS, type CitationFormat } from '@researchtrics/core';
+import { Card, Badge, DoiBadge, OpenAccessBadge, Button, Avatar } from '@researchtrics/ui';
 import { track } from '@/lib/track';
 import { notifyEngagementFromRequest } from '@/lib/notify';
 import { getCurrentUser } from '@/lib/current-user';
 import { RecommendButton } from '@/components/recommend-button';
+import { ShareButton } from '@/components/share-button';
+import { FollowButton } from '@/components/follow-button';
+
+function humanizeType(t: string): string {
+  return t.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+}
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -84,6 +90,18 @@ export default async function PublicationPage({
   const metrics = await getEntityMetrics('publication', p.id);
 
   const doi = p.identifiers.find((i) => i.scheme === 'doi')?.value;
+  const shareUrl = `${appUrl}/publications/${p.slug}`;
+
+  // Follow the work's primary (first linked) author, à la a research feed.
+  const primaryAuthor = p.authors.find((a) => a.researcher)?.researcher ?? null;
+  const canFollowAuthor = !!(
+    viewer?.researcher &&
+    primaryAuthor &&
+    viewer.researcher.id !== primaryAuthor.id
+  );
+  const authorFollow = canFollowAuthor
+    ? await getFollowState(primaryAuthor!.id, viewer!.researcher!.id)
+    : null;
 
   const scholarlyJsonLd = {
     '@context': 'https://schema.org',
@@ -107,6 +125,7 @@ export default async function PublicationPage({
       />
 
       <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="neutral">{humanizeType(p.outputType)}</Badge>
         <Badge variant="outline" className="font-mono">{p.publicId}</Badge>
         {p.openAccess ? <OpenAccessBadge /> : null}
         {doi ? <DoiBadge doi={doi} /> : null}
@@ -114,20 +133,22 @@ export default async function PublicationPage({
 
       <h1 className="mt-3 text-3xl font-semibold leading-tight text-rt-text">{p.title}</h1>
 
-      <p className="mt-3 text-rt-text">
-        {p.authors.map((a, i) => (
-          <span key={a.id}>
+      <ul className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+        {p.authors.map((a) => (
+          <li key={a.id} className="flex items-center gap-1.5">
             {a.researcher ? (
-              <Link href={`/researchers/${a.researcher.slug}`} className="text-rt-blue hover:underline">
-                {a.rawName}
-              </Link>
+              <>
+                <Avatar name={a.rawName} src={a.researcher.photoUrl ?? undefined} size="sm" />
+                <Link href={`/researchers/${a.researcher.slug}`} className="text-sm text-rt-blue hover:underline">
+                  {a.rawName}
+                </Link>
+              </>
             ) : (
-              a.rawName
+              <span className="text-sm text-rt-text">{a.rawName}</span>
             )}
-            {i < p.authors.length - 1 ? ', ' : ''}
-          </span>
+          </li>
         ))}
-      </p>
+      </ul>
 
       <p className="mt-2 text-sm text-rt-muted">
         {p.journal?.name ? <span className="font-medium text-rt-text">{p.journal.name}</span> : null}
@@ -149,12 +170,20 @@ export default async function PublicationPage({
             <a href={`https://doi.org/${doi}`} target="_blank" rel="noopener noreferrer">View at publisher</a>
           </Button>
         ) : null}
-        <RecommendButton slug={p.slug} />
         {pdfUrlFor(p, appUrl) ? (
           <Button asChild size="sm">
-            <a href={pdfUrlFor(p, appUrl)} target="_blank" rel="noopener noreferrer">PDF</a>
+            <a href={pdfUrlFor(p, appUrl)} target="_blank" rel="noopener noreferrer">Download PDF</a>
           </Button>
         ) : null}
+        <RecommendButton slug={p.slug} />
+        {authorFollow ? (
+          <FollowButton
+            researcherId={primaryAuthor!.id}
+            initialFollowing={authorFollow.isFollowing}
+            name={primaryAuthor!.displayName}
+          />
+        ) : null}
+        <ShareButton url={shareUrl} title={p.title} />
       </div>
 
       {p.abstract ? (

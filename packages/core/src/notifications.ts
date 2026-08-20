@@ -98,6 +98,10 @@ export function describeNotification(n: {
     const who = n.actorLabel ?? 'A researcher';
     return `${who} wants to collaborate with you.`;
   }
+  if (n.type === 'follow') {
+    const who = n.actorLabel ?? 'A researcher';
+    return `${who} started following you.`;
+  }
   if (n.type === 'opportunity_match') {
     const kind = (n.opportunityType ?? 'opportunity').replace(/_/g, ' ');
     const what = n.opportunityTitle ? `: “${n.opportunityTitle}”` : '';

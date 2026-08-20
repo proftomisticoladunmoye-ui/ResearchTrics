@@ -434,6 +434,8 @@ model Researcher {
   claimInvitations       ClaimInvitation[]
   publicationClaims      ResearcherPublicationClaim[]
   notifications          Notification[]               @relation("ResearcherNotifications")
+  following              Follow[]                     @relation("Following")
+  followers              Follow[]                     @relation("Followers")
 
   @@index([familyName])
   @@index([profileStatus])
@@ -1507,6 +1509,7 @@ enum NotificationType {
   citation
   opportunity_match
   collaboration_request
+  follow
 }
 
 model Notification {
@@ -1549,4 +1552,20 @@ model BlogPost {
 
   @@index([published, publishedAt])
   @@map("blog_posts")
+}
+
+/// One researcher following another (§18). A lightweight social edge — distinct
+/// from collaboration requests and from co-authorship.
+model Follow {
+  id         String   @id @default(uuid())
+  followerId String   @map("follower_id")
+  followedId String   @map("followed_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  follower Researcher @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  followed Researcher @relation("Followers", fields: [followedId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followedId])
+  @@index([followedId])
+  @@map("follows")
 }

@@ -375,7 +375,7 @@ const publicationInclude = {
   citationCounts: true,
   authors: {
     orderBy: { authorOrder: 'asc' },
-    include: { researcher: { select: { slug: true, displayName: true } } },
+    include: { researcher: { select: { id: true, slug: true, displayName: true, photoUrl: true } } },
   },
   // Uploaded full text — surfaced as citation_pdf_url for Google Scholar (§11).
   primaryFile: { select: { storageKey: true, mimeType: true } },

@@ -50,4 +50,14 @@ describe('describeNotification', () => {
     const s = describeNotification({ type: 'collaboration_request', country: null, publicationTitle: null });
     expect(s).toBe('A researcher wants to collaborate with you.');
   });
+
+  it('renders a follow notification with the follower name', () => {
+    const s = describeNotification({
+      type: 'follow',
+      country: null,
+      publicationTitle: null,
+      actorLabel: 'Grace Hopper',
+    });
+    expect(s).toBe('Grace Hopper started following you.');
+  });
 });

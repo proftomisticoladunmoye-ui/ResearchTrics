@@ -5,6 +5,7 @@ import {
   getResearcherBySlug,
   getResearcherAnalytics,
   listResearcherPublications,
+  getFollowState,
   isAdmin,
 } from '@researchtrics/core';
 import {
@@ -20,6 +21,7 @@ import { getCurrentUser } from '@/lib/current-user';
 import { ReferButton } from '@/components/refer-button';
 import { track } from '@/lib/track';
 import { ConnectButton } from '@/components/connect-button';
+import { FollowButton } from '@/components/follow-button';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
@@ -76,9 +78,10 @@ export default async function ResearcherProfilePage({
 
   // Record a profile view (not for the owner viewing their own page; bots filtered).
   if (!isOwner) await track('profile_view', 'researcher', r.id);
-  const [analytics, publications] = await Promise.all([
+  const [analytics, publications, followState] = await Promise.all([
     getResearcherAnalytics(r.id),
     listResearcherPublications(r.id, { take: 100 }),
+    getFollowState(r.id, viewer?.researcher?.id ?? null),
   ]);
 
   const orcid = r.orcidConnection?.orcid ?? r.identifiers.find((i) => i.scheme === 'orcid')?.value;
@@ -162,8 +165,15 @@ export default async function ResearcherProfilePage({
               </a>
             ) : null}
             {viewer && !isOwner && viewer.researcher ? (
+              <FollowButton researcherId={r.id} initialFollowing={followState.isFollowing} name={r.displayName} />
+            ) : null}
+            {viewer && !isOwner && viewer.researcher ? (
               <ConnectButton toResearcherId={r.id} />
             ) : null}
+            <span className="text-sm text-rt-muted">
+              <strong className="text-rt-text">{followState.followers.toLocaleString()}</strong>{' '}
+              follower{followState.followers === 1 ? '' : 's'}
+            </span>
             <Link
               href={`/researchers/${r.slug}/network`}
               className="text-sm text-rt-blue hover:underline"

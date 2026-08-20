@@ -18,11 +18,14 @@ import { logger } from './logger';
 
 export type AssistantTask =
   | 'journal_article'
+  | 'grant'
   | 'abstract'
   | 'title'
   | 'improve'
   | 'proofread'
+  | 'translate'
   | 'paraphrase'
+  | 'critique'
   | 'questions'
   | 'keywords'
   | 'summary'
@@ -33,11 +36,14 @@ export type AssistantTask =
 
 export const ASSISTANT_TASKS: readonly AssistantTask[] = [
   'journal_article',
+  'grant',
   'abstract',
   'title',
   'improve',
   'proofread',
+  'translate',
   'paraphrase',
+  'critique',
   'questions',
   'keywords',
   'summary',
@@ -50,6 +56,12 @@ export const ASSISTANT_TASKS: readonly AssistantTask[] = [
 const INSTRUCTIONS: Record<AssistantTask, string> = {
   journal_article:
     'Write a complete first draft of a journal article from the author’s brief below, in IMRaD structure with clear headings: Title, Abstract (150–250 words), Introduction, Methods, Results, Discussion, Conclusion, and References. Use formal academic English. CRITICAL: do not invent the author’s results, statistics, sample sizes, datasets, or quotations — where a specific result is needed, insert [RESULT NEEDED] or [YOUR DATA]. When web browsing is available, support the Introduction and Discussion with real, current literature and list those sources in References with links; when it is not, use [CITATION NEEDED] placeholders rather than inventing references. This is a scaffold the author will complete and verify.',
+  grant:
+    'Draft a concise research grant proposal from the author’s brief below, with headings: Summary, Background and significance, Aims and objectives, Approach and methods, Expected outcomes and impact, and Timeline. Use formal, persuasive academic English. Do not invent results, budgets, or citations — use [BUDGET], [DATA NEEDED], and [CITATION NEEDED] placeholders (real citations only when browsing is available). Return the proposal only.',
+  translate:
+    'Translate the passage below into clear, formal, publication-ready academic English, preserving its exact meaning and every claim. If it is already in English, improve grammar, clarity, and academic tone without changing the meaning. Do not add or remove information, claims, citations, or data. Return only the resulting English text.',
+  critique:
+    'Give constructive, specific feedback on the author’s draft below to help them improve it before submission. Do NOT rewrite the draft and do NOT add any new claims, citations, or data. Organise your response under three headings: "Strengths", "To improve" (clarity, structure, argument, rigour), and "Suggested next steps". Be candid but supportive.',
   abstract:
     'Draft a single structured abstract (background, aim, method, key result, conclusion) of 150–250 words from the author’s title and key points below. Where a specific statistic or result is implied but not given, insert [RESULT NEEDED]. Do not invent numbers or citations.',
   title:
@@ -80,6 +92,9 @@ const INSTRUCTIONS: Record<AssistantTask, string> = {
 
 const MIN_MATERIAL: Record<AssistantTask, number> = {
   journal_article: 20,
+  grant: 20,
+  translate: 10,
+  critique: 40,
   abstract: 20,
   title: 20,
   improve: 30,
@@ -190,8 +205,36 @@ export function offlineAssist(task: AssistantTask, material: string): string {
     case 'improve':
     case 'proofread':
     case 'paraphrase':
+    case 'translate':
     case 'refine':
       return m; // never silently alter the author's meaning offline
+    case 'grant':
+      return [
+        'Grant proposal scaffold (expand each section from your brief):',
+        '',
+        'Summary: ',
+        'Background and significance: [CITATION NEEDED]',
+        'Aims and objectives: ',
+        'Approach and methods: ',
+        'Expected outcomes and impact: ',
+        'Timeline: ',
+        'Budget: [BUDGET]',
+        '',
+        '(Enable the full AI provider for a complete drafted proposal.)',
+        '',
+        'Your brief:',
+        m,
+      ].join('\n');
+    case 'critique':
+      return [
+        'Self-review checklist (enable the full AI provider for tailored feedback):',
+        '• Is the research question/aim stated clearly and early?',
+        '• Does the method match the question, and is it reproducible?',
+        '• Are results reported before they are interpreted?',
+        '• Are limitations acknowledged honestly?',
+        '• Is every claim supported by evidence or a citation?',
+        '• Is the writing concise, with each paragraph making one point?',
+      ].join('\n');
     case 'outline':
       return [
         'Paper outline (IMRaD scaffold — expand each point from your work):',
@@ -330,9 +373,11 @@ function resolveProvider(): { provider: ReturnType<typeof createAIProvider>['pro
  * an external provider is configured it produces full drafting; otherwise it
  * returns the deterministic on-platform scaffold. Never fabricates.
  */
+export type AssistantLength = 'brief' | 'standard' | 'detailed';
+
 export async function runAssistantTask(
   researcherId: string,
-  input: { task: AssistantTask; material: string; directive?: string; web?: boolean },
+  input: { task: AssistantTask; material: string; directive?: string; web?: boolean; length?: AssistantLength },
   client: PrismaClient = prisma,
 ): Promise<AssistantResult> {
   const task = input.task;
@@ -348,10 +393,28 @@ export async function runAssistantTask(
   if (task === 'refine' && directive.length < 2) {
     throw badRequest('Tell the assistant how to revise it (e.g. “make it shorter”).');
   }
+  const lengthHint =
+    input.length === 'brief'
+      ? ' Keep it concise.'
+      : input.length === 'detailed'
+        ? ' Be thorough and comprehensive.'
+        : '';
   const instruction =
-    task === 'refine'
+    (task === 'refine'
       ? `Revise the passage below according to this instruction: "${directive}". Preserve all factual claims and meaning; add no new claims, citations, or data. Return only the revised text.`
-      : INSTRUCTIONS[task];
+      : INSTRUCTIONS[task]) + lengthHint;
+
+  const longForm = task === 'journal_article' || task === 'grant';
+  const maxTokens =
+    input.length === 'brief'
+      ? 900
+      : input.length === 'detailed'
+        ? longForm
+          ? 4000
+          : 3000
+        : longForm
+          ? 4000
+          : undefined;
 
   const facts = await authorFacts(researcherId, client);
   const { provider, fellBack, note } = resolveProvider();
@@ -378,7 +441,7 @@ export async function runAssistantTask(
     facts,
     material,
     web: input.web ?? false,
-    maxTokens: task === 'journal_article' ? 4000 : undefined,
+    maxTokens,
     containsPrivate: false,
   };
 

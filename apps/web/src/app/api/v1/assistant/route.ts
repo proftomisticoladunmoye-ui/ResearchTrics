@@ -28,15 +28,20 @@ export async function POST(req: NextRequest) {
       material?: string;
       directive?: string;
       web?: boolean;
+      length?: string;
     };
     const task = body.task as AssistantTask | undefined;
     if (!task || !ASSISTANT_TASKS.includes(task)) throw badRequest('Choose a valid assistant task');
+    const length = ['brief', 'standard', 'detailed'].includes(String(body.length))
+      ? (body.length as 'brief' | 'standard' | 'detailed')
+      : undefined;
 
     const result = await runAssistantTask(user.researcher.id, {
       task,
       material: String(body.material ?? ''),
       directive: body.directive ? String(body.directive) : undefined,
       web: body.web === true,
+      length,
     });
     return ok(result);
   } catch (err) {

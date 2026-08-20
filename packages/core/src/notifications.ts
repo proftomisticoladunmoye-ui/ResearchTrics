@@ -92,7 +92,12 @@ export function describeNotification(n: {
   publicationTitle: string | null;
   opportunityTitle?: string | null;
   opportunityType?: string | null;
+  actorLabel?: string | null;
 }): string {
+  if (n.type === 'collaboration_request') {
+    const who = n.actorLabel ?? 'A researcher';
+    return `${who} wants to collaborate with you.`;
+  }
   if (n.type === 'opportunity_match') {
     const kind = (n.opportunityType ?? 'opportunity').replace(/_/g, ' ');
     const what = n.opportunityTitle ? `: “${n.opportunityTitle}”` : '';
@@ -124,7 +129,9 @@ export async function listNotifications(
       ? `/opportunities/${n.opportunity.slug}`
       : n.publication
         ? `/publications/${n.publication.slug}`
-        : null,
+        : n.type === 'collaboration_request'
+          ? '/dashboard/collaborate'
+          : null,
     publicationSlug: n.publication?.slug ?? null,
     publicationTitle: n.publication?.title ?? null,
     opportunitySlug: n.opportunity?.slug ?? null,
@@ -138,6 +145,7 @@ export async function listNotifications(
       publicationTitle: n.publication?.title ?? null,
       opportunityTitle: n.opportunity?.title ?? null,
       opportunityType: n.opportunity?.type ?? null,
+      actorLabel: n.actorLabel,
     }),
   }));
 }

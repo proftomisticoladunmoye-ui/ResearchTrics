@@ -176,6 +176,14 @@ async function main() {
     check('recommends a collaborator with shared interest', recs.length >= 1 && recs[0]!.researcherId === reg2.researcher.id, recs[0]?.displayName);
     check('every recommendation is explained (Spec §29)', recs.every((r) => r.reasons.length > 0), recs[0]?.reasons.join('; '));
     const cr = await core.createCollaborationRequest(reg.researcher.id, reg2.researcher.id, 'Keen to collaborate');
+    // The recipient must actually receive it: in their inbox AND as an alert (§41).
+    const incomingBefore = await core.listIncomingRequests(reg2.researcher.id);
+    check('recipient receives the request in their inbox', incomingBefore.some((r) => r.id === cr.id));
+    const collabNotifs = await core.listNotifications(reg2.researcher.id);
+    check(
+      'recipient is alerted with a collaboration notification (§41)',
+      collabNotifs.some((n) => n.type === 'collaboration_request' && /wants to collaborate/.test(n.message) && n.href === '/dashboard/collaborate' && !n.read),
+    );
     await core.respondToRequest(cr.id, reg2.researcher.id, true);
     const incoming = await core.listIncomingRequests(reg2.researcher.id);
     check('request accepted (no longer pending)', incoming.length === 0);

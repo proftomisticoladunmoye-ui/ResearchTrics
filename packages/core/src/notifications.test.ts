@@ -35,4 +35,19 @@ describe('describeNotification', () => {
     const s = describeNotification({ type: 'opportunity_match', country: null, publicationTitle: null });
     expect(s).toBe('A new opportunity matches your interests.');
   });
+
+  it('renders a collaboration request with the sender name', () => {
+    const s = describeNotification({
+      type: 'collaboration_request',
+      country: null,
+      publicationTitle: null,
+      actorLabel: 'Dr Ada Lovelace',
+    });
+    expect(s).toBe('Dr Ada Lovelace wants to collaborate with you.');
+  });
+
+  it('falls back gracefully when the sender name is missing', () => {
+    const s = describeNotification({ type: 'collaboration_request', country: null, publicationTitle: null });
+    expect(s).toBe('A researcher wants to collaborate with you.');
+  });
 });

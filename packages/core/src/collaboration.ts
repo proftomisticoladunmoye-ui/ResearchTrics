@@ -188,9 +188,27 @@ export async function createCollaborationRequest(
   });
   if (existing) throw conflict('You have already sent this researcher a request');
 
+  const sender = await client.researcher.findUnique({
+    where: { id: fromResearcherId },
+    select: { displayName: true },
+  });
+
   const created = await client.collaborationRequest.create({
     data: { fromResearcherId, toResearcherId, message },
   });
+
+  // Alert the recipient so the request is actually noticed (§41) — otherwise it
+  // sits unseen in their Collaborate inbox. Failure here must not fail the request.
+  await client.notification
+    .create({
+      data: {
+        recipientId: toResearcherId,
+        type: 'collaboration_request',
+        actorLabel: sender?.displayName ?? 'A researcher',
+      },
+    })
+    .catch(() => undefined);
+
   return { id: created.id };
 }
 

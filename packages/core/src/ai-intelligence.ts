@@ -375,6 +375,44 @@ export async function precomputeProfileSummaries(
 
 // ---------- Bundle for the dashboard ----------
 
+export interface CachedIntelligence {
+  /** The worker-precomputed summary (never a live call), or null if none yet. */
+  summaryText: string | null;
+  summaryModel: string | null;
+  external: boolean;
+  expertise: ExpertiseTerm[];
+  groundedRecordCount: number;
+}
+
+/**
+ * Dashboard intelligence WITHOUT any live provider call. Reads the cached
+ * profile summary (precomputed in the background) and derives expertise from the
+ * researcher's own records — so the page loads instantly and never blocks on a
+ * slow/unreachable AI provider.
+ */
+export async function getCachedResearcherIntelligence(
+  researcherId: string,
+  client: PrismaClient = prisma,
+): Promise<CachedIntelligence> {
+  const records = await gatherRecords(researcherId, client);
+  const facts = buildFacts(records);
+  const cached = await client.researcher.findUnique({
+    where: { id: researcherId },
+    select: { aiSummary: true, aiSummaryModel: true },
+  });
+  const expertise = extractExpertise({
+    interests: records.interests,
+    titles: records.publications.map((p) => ({ ref: p.ref, title: p.title })),
+  });
+  return {
+    summaryText: cached?.aiSummary ?? null,
+    summaryModel: cached?.aiSummaryModel ?? null,
+    external: !!cached?.aiSummaryModel && cached.aiSummaryModel !== 'local',
+    expertise,
+    groundedRecordCount: facts.length,
+  };
+}
+
 export interface ResearcherIntelligence {
   summary: ProfileSummary;
   expertise: ExpertiseTerm[];

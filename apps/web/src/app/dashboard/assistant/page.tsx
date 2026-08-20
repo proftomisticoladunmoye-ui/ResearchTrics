@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { getResearcherIntelligence, type ResearcherIntelligence } from '@researchtrics/core';
+import { getCachedResearcherIntelligence, type CachedIntelligence } from '@researchtrics/core';
 import { Card, Badge, Alert } from '@researchtrics/ui';
 import { getCurrentUser } from '@/lib/current-user';
 import { AssistantConsole } from '@/components/assistant-console';
@@ -17,14 +17,14 @@ export default async function AssistantPage() {
   if (!user) redirect('/login');
   if (!user.researcher) redirect('/dashboard');
 
-  // The "profile interpreted" panel makes an AI call. It must NEVER blank the
-  // page — the writing tools below work independently via the API route — so a
-  // provider/env failure degrades to a soft note instead of throwing.
-  let intel: ResearcherIntelligence | null = null;
+  // Profile insights use the CACHED summary (precomputed in the background) and
+  // locally-derived expertise — no live AI call — so the page loads instantly
+  // and never blocks on a slow/unreachable provider.
+  let intel: CachedIntelligence | null = null;
   try {
-    intel = await getResearcherIntelligence(user.researcher.id);
+    intel = await getCachedResearcherIntelligence(user.researcher.id);
   } catch (err) {
-    console.warn('AI Assistant: profile interpretation unavailable —', (err as Error).message);
+    console.warn('AI Assistant: profile insights unavailable —', (err as Error).message);
   }
   const maxWeight = intel ? Math.max(1, ...intel.expertise.map((e) => e.weight)) : 1;
 
@@ -58,12 +58,14 @@ export default async function AssistantPage() {
         ) : (
           <>
             <Alert variant="info" title="How this is generated" className="mt-3">
-              Generated {intel.summary.external ? 'by an external AI provider' : 'on-platform'} (
-              <span className="font-mono">{intel.summary.generation.model}</span>) from{' '}
-              {intel.groundedRecordCount} verified record
-              {intel.groundedRecordCount === 1 ? '' : 's'} you have provided. This is an
-              interpretation, not a verified fact.{' '}
-              {intel.summary.external
+              A cached summary
+              {intel.summaryModel ? (
+                <> (<span className="font-mono">{intel.external ? intel.summaryModel : 'on-platform'}</span>)</>
+              ) : null}{' '}
+              from {intel.groundedRecordCount} verified record
+              {intel.groundedRecordCount === 1 ? '' : 's'} you have provided, refreshed in the
+              background. This is an interpretation, not a verified fact.{' '}
+              {intel.external
                 ? 'Only your public records are ever sent to an AI provider; private data is never transmitted.'
                 : 'No data leaves the platform.'}
             </Alert>
@@ -73,14 +75,12 @@ export default async function AssistantPage() {
                 <h3 className="text-base font-semibold text-rt-text">Profile summary</h3>
                 <Badge variant="neutral">AI-generated · grounded</Badge>
               </div>
-              {intel.summary.generation.text ? (
-                <p className="mt-3 text-sm leading-relaxed text-rt-text">
-                  {intel.summary.generation.text}
-                </p>
+              {intel.summaryText ? (
+                <p className="mt-3 text-sm leading-relaxed text-rt-text">{intel.summaryText}</p>
               ) : (
                 <p className="mt-3 text-sm text-rt-muted">
-                  Not enough records yet to summarize. Add interests, an affiliation, and a
-                  publication to get started.
+                  No summary yet — it&rsquo;s generated in the background. Add interests, an
+                  affiliation, and a publication, then check back shortly.
                 </p>
               )}
             </Card>

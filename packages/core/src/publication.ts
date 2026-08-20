@@ -8,7 +8,7 @@ import {
   type CitationSource,
 } from '@researchtrics/db';
 import { formatOutputId, slugWithSuffix } from './id';
-import { notFound } from './errors';
+import { notFound, forbidden } from './errors';
 import type { CitationData } from './citation-export';
 
 /**
@@ -85,6 +85,11 @@ export interface ManualPublicationInput {
   publisher?: string | null;
   /** An uploaded file's storage id to attach as the primary file. */
   primaryFileId?: string | null;
+  /**
+   * Other authors on the work, so the uploader isn't shown as sole author. Each
+   * is stored by name; a verified ORCID links them to their platform profile.
+   */
+  coAuthors?: Array<{ name: string; orcid?: string | null }>;
 }
 
 /**
@@ -113,6 +118,22 @@ export async function createManualPublication(
     ? await upsertJournal({ name: input.venue, publisher: input.publisher ?? undefined }, client)
     : null;
 
+  // Resolve co-authors to platform profiles via verified ORCID (safe linking).
+  const coAuthors = (input.coAuthors ?? [])
+    .map((c) => ({ name: c.name?.trim() ?? '', orcid: c.orcid?.trim() || null }))
+    .filter((c) => c.name.length > 0)
+    .slice(0, 30);
+  const coAuthorLinks = await Promise.all(
+    coAuthors.map(async (c) => {
+      if (!c.orcid) return null;
+      const idRow = await client.researcherIdentifier.findUnique({
+        where: { scheme_value: { scheme: 'orcid', value: c.orcid } },
+        select: { researcherId: true, verified: true },
+      });
+      return idRow?.verified ? idRow.researcherId : null;
+    }),
+  );
+
   const pub = await client.publication.create({
     data: {
       publicId,
@@ -125,12 +146,16 @@ export async function createManualPublication(
       publishedYear: input.publishedYear ?? null,
       primaryFileId: input.primaryFileId ?? null,
       authors: {
-        create: {
-          researcherId,
-          authorOrder: 0,
-          rawName: authorName,
-          matchConfidence: 1,
-        },
+        create: [
+          { researcherId, authorOrder: 0, rawName: authorName, matchConfidence: 1 },
+          ...coAuthors.map((c, i) => ({
+            authorOrder: i + 1,
+            rawName: c.name,
+            orcid: c.orcid,
+            researcherId: coAuthorLinks[i] ?? null,
+            matchConfidence: coAuthorLinks[i] ? 0.99 : null,
+          })),
+        ],
       },
     },
   });
@@ -401,6 +426,41 @@ export async function listRecentPublicationDetails(
     take,
     include: publicationInclude,
   });
+}
+
+/**
+ * Remove a publication from a researcher's profile (§9). If they are the only
+ * linked author (a manual add / duplicate / error), the whole record is
+ * soft-deleted. If the work has other linked authors, only this researcher's
+ * authorship is detached — the shared record is preserved for the co-authors.
+ */
+export async function removePublicationForResearcher(
+  researcherId: string,
+  publicationId: string,
+  client: PrismaClient = prisma,
+): Promise<{ deleted: boolean; unlinked: boolean }> {
+  const authorship = await client.publicationAuthor.findFirst({
+    where: { publicationId, researcherId, publication: { deletedAt: null } },
+    select: { id: true },
+  });
+  if (!authorship) throw forbidden('You are not listed as an author of this publication.');
+
+  // Other linked authors: a researcher_id that is set and not this researcher.
+  const linked = await client.publicationAuthor.findMany({
+    where: { publicationId, researcherId: { not: null } },
+    select: { researcherId: true },
+  });
+  const otherLinked = linked.filter((a) => a.researcherId && a.researcherId !== researcherId).length;
+
+  if (otherLinked === 0) {
+    await client.publication.update({ where: { id: publicationId }, data: { deletedAt: new Date() } });
+    return { deleted: true, unlinked: false };
+  }
+  await client.publicationAuthor.update({
+    where: { id: authorship.id },
+    data: { researcherId: null, matchConfidence: null },
+  });
+  return { deleted: false, unlinked: true };
 }
 
 export async function listPublications(

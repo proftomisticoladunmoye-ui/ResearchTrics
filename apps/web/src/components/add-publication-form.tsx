@@ -26,6 +26,12 @@ export function AddPublicationForm() {
   const router = useRouter();
   const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle');
   const [message, setMessage] = useState<string | null>(null);
+  const [coAuthors, setCoAuthors] = useState<Array<{ name: string; orcid: string }>>([]);
+
+  const addCoAuthor = () => setCoAuthors((cs) => [...cs, { name: '', orcid: '' }]);
+  const updateCoAuthor = (i: number, key: 'name' | 'orcid', value: string) =>
+    setCoAuthors((cs) => cs.map((c, idx) => (idx === i ? { ...c, [key]: value } : c)));
+  const removeCoAuthor = (i: number) => setCoAuthors((cs) => cs.filter((_, idx) => idx !== i));
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -69,6 +75,12 @@ export function AddPublicationForm() {
         ...(primaryFileId ? { primaryFileId } : {}),
       };
 
+      const cleanCoAuthors = coAuthors
+        .map((c) => ({ name: c.name.trim(), orcid: c.orcid.trim() }))
+        .filter((c) => c.name.length > 0)
+        .map((c) => ({ name: c.name, ...(c.orcid ? { orcid: c.orcid } : {}) }));
+      if (cleanCoAuthors.length) payload.coAuthors = cleanCoAuthors;
+
       const res = await fetch('/api/v1/publications/manual', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -81,6 +93,7 @@ export function AddPublicationForm() {
         return;
       }
       form.reset();
+      setCoAuthors([]);
       setStatus('idle');
       router.refresh();
     } catch {
@@ -121,6 +134,47 @@ export function AddPublicationForm() {
       <Field label="Abstract" htmlFor="abstract">
         <textarea id="abstract" name="abstract" rows={3} maxLength={10000} className={inputClass} />
       </Field>
+
+      {/* Co-authors — so you aren't shown as the sole author */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-rt-text">Co-authors</span>
+        <span className="-mt-1 text-xs text-rt-muted">
+          Add everyone who authored this work. An ORCID links a co-author to their ResearchTrics profile.
+        </span>
+        {coAuthors.map((c, i) => (
+          <div key={i} className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_170px_auto]">
+            <Input
+              aria-label={`Co-author ${i + 1} name`}
+              value={c.name}
+              onChange={(e) => updateCoAuthor(i, 'name', e.target.value)}
+              maxLength={200}
+              placeholder="Full name"
+            />
+            <Input
+              aria-label={`Co-author ${i + 1} ORCID`}
+              value={c.orcid}
+              onChange={(e) => updateCoAuthor(i, 'orcid', e.target.value)}
+              maxLength={40}
+              placeholder="ORCID (optional)"
+            />
+            <button
+              type="button"
+              onClick={() => removeCoAuthor(i)}
+              className="justify-self-start text-sm text-rt-error hover:underline"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addCoAuthor}
+          className="mt-1 self-start text-sm font-medium text-rt-blue hover:underline"
+        >
+          + Add co-author
+        </button>
+      </div>
+
       <Field label="Attach a file (optional)" htmlFor="file">
         <input
           id="file"

@@ -6,6 +6,7 @@ import { Card, Badge } from '@researchtrics/ui';
 import { getCurrentUser } from '@/lib/current-user';
 import { ImportDoiForm } from '@/components/import-doi-form';
 import { AddPublicationForm } from '@/components/add-publication-form';
+import { RemovePublicationButton } from '@/components/remove-publication-button';
 
 export const metadata: Metadata = {
   title: 'My publications',
@@ -75,11 +76,14 @@ export default async function DashboardPublicationsPage() {
                       {a.publication.publishedYear ? ` · ${a.publication.publishedYear}` : ''}
                     </p>
                   </div>
-                  {a.matchConfidence === 1 ? (
-                    <Badge variant="success">Claimed</Badge>
-                  ) : (
-                    <Badge variant="gold">Auto-linked</Badge>
-                  )}
+                  <div className="flex shrink-0 items-center gap-3">
+                    {a.matchConfidence === 1 ? (
+                      <Badge variant="success">Claimed</Badge>
+                    ) : (
+                      <Badge variant="gold">Auto-linked</Badge>
+                    )}
+                    <RemovePublicationButton slug={a.publication.slug} title={a.publication.title} />
+                  </div>
                 </Card>
               </li>
             ))}

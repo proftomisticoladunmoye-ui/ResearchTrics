@@ -849,6 +849,30 @@ async function main() {
     check('manual publication is linked to its author (shows on profile)', myPubs >= 1, `authorships=${myPubs}`);
     const loadedManual = await core.getPublicationBySlug(manualPub.slug);
     check('manual publication loads with its type (book)', loadedManual?.outputType === 'book');
+
+    // Co-authors: uploader is not shown as the sole author.
+    const withCoAuthors = await core.createManualPublication(reg.researcher.id, reg.researcher.displayName, {
+      title: 'A Co-Authored Report',
+      outputType: 'research_report',
+      coAuthors: [{ name: 'Jane Q. Coauthor' }, { name: 'Sam Second' }],
+    });
+    const coAuthored = await core.getPublicationBySlug(withCoAuthors.slug);
+    check(
+      'manual upload records co-authors (not sole author)',
+      !!coAuthored && coAuthored.authors.length === 3 && coAuthored.authors.some((a) => a.rawName === 'Jane Q. Coauthor'),
+      `authors=${coAuthored?.authors.length}`,
+    );
+
+    // Remove a sole-authored publication (error/duplicate) → soft-deleted.
+    const rm = await core.removePublicationForResearcher(reg.researcher.id, withCoAuthors.publicationId);
+    check('removing a sole-authored publication deletes it', rm.deleted && !rm.unlinked);
+    check('deleted publication no longer resolves', !(await core.getPublicationBySlug(withCoAuthors.slug)));
+    // Non-author cannot remove someone else's publication.
+    let removeDenied = false;
+    await core.removePublicationForResearcher(reg2.researcher.id, manualPub.publicationId).catch(() => {
+      removeDenied = true;
+    });
+    check('a non-author cannot remove a publication (FORBIDDEN)', removeDenied);
     check(
       'publication detail carries the file relation for citation_pdf_url (Model A, §11)',
       loadedManual !== null && loadedManual.primaryFile === null,

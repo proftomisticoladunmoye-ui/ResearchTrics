@@ -31,6 +31,10 @@ const schema = z.object({
   venue: z.string().max(300).optional(),
   publisher: z.string().max(300).optional(),
   primaryFileId: z.string().uuid().optional(),
+  coAuthors: z
+    .array(z.object({ name: z.string().min(1).max(200), orcid: z.string().max(40).optional() }))
+    .max(30)
+    .optional(),
 });
 
 /** Add a publication by hand (non-DOI outputs — books, talks, reports). */
@@ -50,6 +54,7 @@ export async function POST(req: NextRequest) {
       venue: parsed.data.venue ?? null,
       publisher: parsed.data.publisher ?? null,
       primaryFileId: parsed.data.primaryFileId ?? null,
+      coAuthors: parsed.data.coAuthors?.map((c) => ({ name: c.name, orcid: c.orcid ?? null })) ?? [],
     });
     return ok(result);
   } catch (err) {

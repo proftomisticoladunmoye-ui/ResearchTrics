@@ -32,33 +32,26 @@ export default async function AssistantPage() {
     <div className="mx-auto max-w-4xl px-4 py-12">
       <h1 className="text-2xl font-semibold text-rt-text">AI Assistant</h1>
       <p className="mt-1 max-w-2xl text-sm text-rt-muted">
-        Draft, refine, and plan your research writing. The assistant works from{' '}
-        <strong>your own material</strong> — it never invents citations, data, or results, and
-        marks anything you need to supply with a placeholder. Verify everything before use.
+        Draft full journal articles, refine your writing, and plan research — optionally{' '}
+        <strong>browsing the web</strong> for real, current sources. It works from your own material
+        and never invents your data or results; verify everything before use.
       </p>
 
-      {/* Writing tools */}
-      <section className="mt-6">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-rt-text">Write &amp; brainstorm</h2>
-          <Badge variant="gold">New</Badge>
-        </div>
-        <p className="mt-1 text-xs text-rt-muted">
-          Abstracts, titles &amp; outlines · proofreading, paraphrasing &amp; language polish ·
-          cover letters &amp; reviewer responses · keywords, questions &amp; lay summaries — then
-          refine any result in one tap.
-        </p>
-        <div className="mt-3">
-          <AssistantConsole />
-        </div>
-      </section>
+      {/* Writing tools — the console carries its own tool picker + guidance */}
+      <div className="mt-6">
+        <AssistantConsole />
+      </div>
 
-      {/* Grounded interpretation of the researcher's own records */}
-      <section className="mt-10">
-        <h2 className="text-base font-semibold text-rt-text">Your profile, interpreted</h2>
-
+      {/* Grounded interpretation of the researcher's own records — tucked away in
+          a collapsible panel so it doesn't crowd the writing tools. */}
+      <details className="mt-8 rounded-lg border border-rt-border">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-rt-text [&::-webkit-details-marker]:hidden">
+          <span className="mr-1 inline-block transition-transform">▸</span> Your profile insights
+          <span className="ml-1 font-normal text-rt-muted">— AI summary &amp; expertise from your records</span>
+        </summary>
+        <div className="border-t border-rt-border p-4">
         {intel === null ? (
-          <Alert variant="warning" title="Profile interpretation unavailable" className="mt-3">
+          <Alert variant="warning" title="Profile interpretation unavailable">
             The profile summary couldn&rsquo;t be generated right now (the AI provider may be
             unconfigured or temporarily unreachable). The writing tools above are unaffected.
           </Alert>
@@ -130,7 +123,8 @@ export default async function AssistantPage() {
             </Card>
           </>
         )}
-      </section>
+        </div>
+      </details>
     </div>
   );
 }

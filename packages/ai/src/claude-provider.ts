@@ -38,7 +38,7 @@ export class ClaudeProvider implements AIProvider {
 
     const response = await this.client.messages.create({
       model: this.model,
-      max_tokens: mode === 'assist' ? 2000 : 1500,
+      max_tokens: ctx.maxTokens ?? (mode === 'assist' ? 2000 : 1500),
       thinking: { type: 'adaptive' },
       output_config: { effort: mode === 'assist' ? 'medium' : 'low' },
       system,

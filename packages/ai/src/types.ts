@@ -54,6 +54,14 @@ export interface GroundedContext {
    */
   material?: string;
   /**
+   * Assist mode only: allow the provider to browse the web for real, current
+   * sources and cite them (grounding, not fabrication). Supported by gateways
+   * with a web plugin (OpenRouter); ignored otherwise.
+   */
+  web?: boolean;
+  /** Upper bound on output length; providers pick a sensible default otherwise. */
+  maxTokens?: number;
+  /**
    * True if `facts` include any non-public researcher data. External providers
    * must refuse to transmit private data without explicit authorization
    * (Spec §92). ResearchTrics only ever assembles public facts, so this is a

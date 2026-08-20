@@ -94,6 +94,31 @@ describe('OpenAICompatibleProvider (injected fetch — offline)', () => {
     await expect(provider.generateGrounded(summaryCtx)).rejects.toThrow('timed out');
   });
 
+  it('enables the web plugin and a higher token budget when browsing', async () => {
+    let sentBody: { plugins?: Array<{ id: string }>; max_tokens?: number } | null = null;
+    const fakeFetch = (async (_u: string, init?: RequestInit) => {
+      sentBody = JSON.parse(String(init?.body));
+      return { ok: true, json: async () => ({ choices: [{ message: { content: 'cited draft' } }] }) };
+    }) as unknown as typeof fetch;
+    await new OpenAICompatibleProvider({ apiKey: 'k', model: 'x/y', fetchImpl: fakeFetch }).generateGrounded({
+      ...assistCtx,
+      web: true,
+      maxTokens: 4000,
+    });
+    expect(sentBody!.plugins).toEqual([{ id: 'web' }]);
+    expect(sentBody!.max_tokens).toBe(4000);
+  });
+
+  it('omits the web plugin by default', async () => {
+    let sentBody: { plugins?: unknown } | null = null;
+    const fakeFetch = (async (_u: string, init?: RequestInit) => {
+      sentBody = JSON.parse(String(init?.body));
+      return { ok: true, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) };
+    }) as unknown as typeof fetch;
+    await new OpenAICompatibleProvider({ apiKey: 'k', model: 'x/y', fetchImpl: fakeFetch }).generateGrounded(assistCtx);
+    expect(sentBody!.plugins).toBeUndefined();
+  });
+
   it('throws on a non-ok response', async () => {
     const fakeFetch = (async () => ({ ok: false, status: 429, text: async () => 'rate limited' })) as unknown as typeof fetch;
     const provider = new OpenAICompatibleProvider({ apiKey: 'k', model: 'x/y', fetchImpl: fakeFetch });

@@ -17,6 +17,7 @@ import { logger } from './logger';
  */
 
 export type AssistantTask =
+  | 'journal_article'
   | 'abstract'
   | 'title'
   | 'improve'
@@ -31,6 +32,7 @@ export type AssistantTask =
   | 'refine';
 
 export const ASSISTANT_TASKS: readonly AssistantTask[] = [
+  'journal_article',
   'abstract',
   'title',
   'improve',
@@ -46,6 +48,8 @@ export const ASSISTANT_TASKS: readonly AssistantTask[] = [
 ] as const;
 
 const INSTRUCTIONS: Record<AssistantTask, string> = {
+  journal_article:
+    'Write a complete first draft of a journal article from the author’s brief below, in IMRaD structure with clear headings: Title, Abstract (150–250 words), Introduction, Methods, Results, Discussion, Conclusion, and References. Use formal academic English. CRITICAL: do not invent the author’s results, statistics, sample sizes, datasets, or quotations — where a specific result is needed, insert [RESULT NEEDED] or [YOUR DATA]. When web browsing is available, support the Introduction and Discussion with real, current literature and list those sources in References with links; when it is not, use [CITATION NEEDED] placeholders rather than inventing references. This is a scaffold the author will complete and verify.',
   abstract:
     'Draft a single structured abstract (background, aim, method, key result, conclusion) of 150–250 words from the author’s title and key points below. Where a specific statistic or result is implied but not given, insert [RESULT NEEDED]. Do not invent numbers or citations.',
   title:
@@ -75,6 +79,7 @@ const INSTRUCTIONS: Record<AssistantTask, string> = {
 };
 
 const MIN_MATERIAL: Record<AssistantTask, number> = {
+  journal_article: 20,
   abstract: 20,
   title: 20,
   improve: 30,
@@ -146,6 +151,24 @@ function firstSentences(text: string, n: number): string {
 export function offlineAssist(task: AssistantTask, material: string): string {
   const m = material.trim();
   switch (task) {
+    case 'journal_article':
+      return [
+        'Journal article scaffold (IMRaD — expand each section from your work):',
+        '',
+        'Title: ',
+        'Abstract: (150–250 words: background, aim, method, key result, conclusion)',
+        'Introduction: background, gap, aim/contribution [CITATION NEEDED]',
+        'Methods: design, participants/data, procedure, analysis',
+        'Results: [YOUR DATA] — key findings in order',
+        'Discussion: interpretation, comparison to prior work [CITATION NEEDED], limitations',
+        'Conclusion: takeaway and future work',
+        'References: [add real sources]',
+        '',
+        '(Enable the full AI provider — and web browsing — for a complete drafted article with real citations.)',
+        '',
+        'Your brief:',
+        m,
+      ].join('\n');
     case 'keywords': {
       const kws = extractKeywords(m, 12);
       return kws.length
@@ -309,7 +332,7 @@ function resolveProvider(): { provider: ReturnType<typeof createAIProvider>['pro
  */
 export async function runAssistantTask(
   researcherId: string,
-  input: { task: AssistantTask; material: string; directive?: string },
+  input: { task: AssistantTask; material: string; directive?: string; web?: boolean },
   client: PrismaClient = prisma,
 ): Promise<AssistantResult> {
   const task = input.task;
@@ -354,6 +377,8 @@ export async function runAssistantTask(
     instruction,
     facts,
     material,
+    web: input.web ?? false,
+    maxTokens: task === 'journal_article' ? 4000 : undefined,
     containsPrivate: false,
   };
 

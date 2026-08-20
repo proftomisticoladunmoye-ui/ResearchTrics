@@ -75,25 +75,32 @@ export class OpenAICompatibleProvider implements AIProvider {
     if (this.referer) headers['HTTP-Referer'] = this.referer;
     if (this.title) headers['X-Title'] = this.title;
 
+    const maxTokens = ctx.maxTokens ?? (mode === 'assist' ? 2000 : 1500);
+    const body: Record<string, unknown> = {
+      model: this.model,
+      max_tokens: maxTokens,
+      temperature: mode === 'assist' ? 0.4 : 0.2,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+    };
+    // Web browsing: OpenRouter's web plugin fetches real sources and returns
+    // citations, so the model grounds in the live web rather than guessing.
+    if (ctx.web) body.plugins = [{ id: 'web' }];
+
     // Bound the request: a slow or unreachable upstream must fail fast so the
-    // caller can fall back, never hang the user's request indefinitely.
+    // caller can fall back, never hang the user's request indefinitely. Web
+    // searches take longer, so allow more time when browsing.
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const timer = setTimeout(() => controller.abort(), ctx.web ? this.timeoutMs * 2 : this.timeoutMs);
     let res: Awaited<ReturnType<typeof fetch>>;
     try {
       res = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers,
         signal: controller.signal,
-        body: JSON.stringify({
-          model: this.model,
-          max_tokens: mode === 'assist' ? 2000 : 1500,
-          temperature: mode === 'assist' ? 0.4 : 0.2,
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-          ],
-        }),
+        body: JSON.stringify(body),
       });
     } catch (err) {
       if (controller.signal.aborted) {

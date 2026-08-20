@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
       task?: string;
       material?: string;
       directive?: string;
+      web?: boolean;
     };
     const task = body.task as AssistantTask | undefined;
     if (!task || !ASSISTANT_TASKS.includes(task)) throw badRequest('Choose a valid assistant task');
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
       task,
       material: String(body.material ?? ''),
       directive: body.directive ? String(body.directive) : undefined,
+      web: body.web === true,
     });
     return ok(result);
   } catch (err) {

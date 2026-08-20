@@ -1,110 +1,113 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, Button, Badge, Alert } from '@researchtrics/ui';
 
 /** One writing tool the assistant offers. */
 interface Tool {
   task: string;
   label: string;
+  group: 'Write' | 'Polish' | 'Discover';
   blurb: string;
   placeholder: string;
+  /** Web browsing is offered for research-oriented tools only. */
+  web?: boolean;
 }
 
-interface ToolGroup {
-  heading: string;
-  tools: Tool[];
-}
-
-// The full toolset (the core supports all of these). Grouped so the surface
-// reads clearly: compose, polish, and discover.
-const GROUPS: ToolGroup[] = [
+const TOOLS: Tool[] = [
   {
-    heading: 'Write',
-    tools: [
-      {
-        task: 'abstract',
-        label: 'Abstract',
-        blurb: 'A structured abstract (150–250 words) from your title and key points.',
-        placeholder:
-          'Title: Reading intervention in rural primary schools\n\nKey points:\n- randomised across 12 schools\n- measured fluency at 6 months\n- (add your main finding)',
-      },
-      {
-        task: 'outline',
-        label: 'Paper outline',
-        blurb: 'An IMRaD structure with prompts for each section.',
-        placeholder: 'Describe your study — topic, what you did, and what you found…',
-      },
-      {
-        task: 'cover_letter',
-        label: 'Cover letter',
-        blurb: 'A cover letter to the journal editor.',
-        placeholder:
-          'What the paper reports, the target journal, and why it fits. Use [JOURNAL]/[EDITOR] if unsure.',
-      },
-      {
-        task: 'reviewer_response',
-        label: 'Reviewer response',
-        blurb: 'A courteous, point-by-point reply to reviewer comments.',
-        placeholder: 'Paste the reviewer comments. Add your intended change after each if you have it…',
-      },
-    ],
+    task: 'journal_article',
+    label: 'Journal article — full draft',
+    group: 'Write',
+    web: true,
+    blurb: 'A complete IMRaD first draft from your brief. Turn on web browsing for real citations.',
+    placeholder:
+      'Describe your study: topic, aim, method, and your main finding(s).\n\ne.g. A randomised trial of a numeracy intervention in 12 rural primary schools; measured comprehension gains at 6 months; main finding: a 14% improvement over control.',
   },
   {
-    heading: 'Polish',
-    tools: [
-      {
-        task: 'proofread',
-        label: 'Proofread',
-        blurb: 'Fix grammar, spelling, tense, and articles — ideal for writing in English as a second language.',
-        placeholder: 'Paste the passage to proofread…',
-      },
-      {
-        task: 'improve',
-        label: 'Improve writing',
-        blurb: 'Clearer, tighter, more formal academic English — no new claims added.',
-        placeholder: 'Paste the paragraph you want to strengthen…',
-      },
-      {
-        task: 'paraphrase',
-        label: 'Paraphrase',
-        blurb: 'Reword and restructure while keeping the exact meaning.',
-        placeholder: 'Paste the passage to reword…',
-      },
-    ],
+    task: 'abstract',
+    label: 'Abstract',
+    group: 'Write',
+    web: true,
+    blurb: 'A structured abstract (150–250 words) from your title and key points.',
+    placeholder: 'Title + key points, one per line…',
   },
   {
-    heading: 'Discover',
-    tools: [
-      {
-        task: 'title',
-        label: 'Titles',
-        blurb: 'Five publishable title options.',
-        placeholder: 'Paste your abstract or a paragraph describing the study…',
-      },
-      {
-        task: 'keywords',
-        label: 'Keywords',
-        blurb: 'Indexing keywords + classifications for discoverability.',
-        placeholder: 'Paste your title and abstract…',
-      },
-      {
-        task: 'summary',
-        label: 'Plain summary',
-        blurb: 'A lay summary of your work for a general audience.',
-        placeholder: 'Paste your abstract or key results…',
-      },
-      {
-        task: 'questions',
-        label: 'Research questions',
-        blurb: 'Questions, gaps, and hypotheses to pursue in your area.',
-        placeholder: 'Describe your topic, field, or the gap you are exploring…',
-      },
-    ],
+    task: 'outline',
+    label: 'Paper outline',
+    group: 'Write',
+    web: true,
+    blurb: 'An IMRaD outline with what to cover under each heading.',
+    placeholder: 'Describe the work you want to structure…',
+  },
+  {
+    task: 'cover_letter',
+    label: 'Cover letter to editor',
+    group: 'Write',
+    blurb: 'A concise, professional submission letter.',
+    placeholder: 'What the paper reports + the target journal…',
+  },
+  {
+    task: 'reviewer_response',
+    label: 'Response to reviewers',
+    group: 'Write',
+    blurb: 'A courteous, point-by-point response.',
+    placeholder: 'Paste the reviewer comments…',
+  },
+  {
+    task: 'proofread',
+    label: 'Proofread',
+    group: 'Polish',
+    blurb: 'Fix grammar, tense, and word choice without changing meaning.',
+    placeholder: 'Paste the text to proofread…',
+  },
+  {
+    task: 'improve',
+    label: 'Improve writing',
+    group: 'Polish',
+    blurb: 'Clearer, tighter academic English — no new claims.',
+    placeholder: 'Paste the paragraph to tighten…',
+  },
+  {
+    task: 'paraphrase',
+    label: 'Paraphrase',
+    group: 'Polish',
+    blurb: 'Reword while preserving the exact meaning.',
+    placeholder: 'Paste the passage to reword…',
+  },
+  {
+    task: 'title',
+    label: 'Suggest titles',
+    group: 'Discover',
+    blurb: 'Five publishable title options from your abstract.',
+    placeholder: 'Paste your abstract or a summary…',
+  },
+  {
+    task: 'keywords',
+    label: 'Keywords',
+    group: 'Discover',
+    blurb: 'Indexing keywords + classifications for discoverability.',
+    placeholder: 'Paste your title and abstract…',
+  },
+  {
+    task: 'summary',
+    label: 'Plain-language summary',
+    group: 'Discover',
+    web: true,
+    blurb: 'A lay summary of your work for a general audience.',
+    placeholder: 'Paste your abstract or key results…',
+  },
+  {
+    task: 'questions',
+    label: 'Research questions',
+    group: 'Discover',
+    web: true,
+    blurb: 'Questions, gaps, and hypotheses to pursue in your area.',
+    placeholder: 'Describe your topic, field, or the gap you are exploring…',
   },
 ];
 
-const ALL_TOOLS: Tool[] = GROUPS.flatMap((g) => g.tools);
+const GROUPS: Array<Tool['group']> = ['Write', 'Polish', 'Discover'];
 
 interface AssistantResult {
   text: string;
@@ -116,60 +119,35 @@ interface AssistantResult {
 }
 
 export function AssistantConsole() {
-  const [task, setTask] = useState<string>('abstract');
+  const [task, setTask] = useState<string>('journal_article');
   const [material, setMaterial] = useState('');
+  const [web, setWeb] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AssistantResult | null>(null);
   const [copied, setCopied] = useState(false);
-  const [directive, setDirective] = useState('');
-  const [refining, setRefining] = useState(false);
 
-  const active = ALL_TOOLS.find((t) => t.task === task)!;
-  const words = material.trim() ? material.trim().split(/\s+/).length : 0;
-
-  async function call(body: { task: string; material: string; directive?: string }) {
-    const res = await fetch('/api/v1/assistant', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json?.error?.message ?? 'Something went wrong. Please try again.');
-    return json.data as AssistantResult;
-  }
+  const active = useMemo(() => TOOLS.find((t) => t.task === task)!, [task]);
+  const canWeb = !!active.web;
 
   async function run() {
     setLoading(true);
     setError(null);
     setResult(null);
     setCopied(false);
-    setDirective('');
     try {
-      setResult(await call({ task, material }));
-    } catch (e) {
-      setError((e as Error).message);
+      const res = await fetch('/api/v1/assistant', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ task, material, web: canWeb && web }),
+      });
+      const json = await res.json();
+      if (!res.ok) setError(json?.error?.message ?? 'Something went wrong. Please try again.');
+      else setResult(json.data as AssistantResult);
+    } catch {
+      setError('Network error. Please try again.');
     } finally {
       setLoading(false);
-    }
-  }
-
-  // Iterative refine: revise the current result with a plain-language instruction
-  // ("make it shorter", "more formal", "British spelling"). Feeds the result back
-  // as the material under the `refine` task.
-  async function refine() {
-    if (!result || directive.trim().length < 2) return;
-    setRefining(true);
-    setError(null);
-    setCopied(false);
-    try {
-      const refined = await call({ task: 'refine', material: result.text, directive });
-      setResult(refined);
-      setDirective('');
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setRefining(false);
     }
   }
 
@@ -182,53 +160,55 @@ export function AssistantConsole() {
 
   return (
     <Card className="p-6">
-      <div className="space-y-3">
-        {GROUPS.map((g) => (
-          <div key={g.heading}>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-rt-muted">{g.heading}</p>
-            <div className="flex flex-wrap gap-2">
-              {g.tools.map((t) => (
-                <button
-                  key={t.task}
-                  type="button"
-                  onClick={() => {
-                    setTask(t.task);
-                    setResult(null);
-                    setError(null);
-                    setDirective('');
-                  }}
-                  aria-pressed={t.task === task}
-                  className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                    t.task === task
-                      ? 'border-rt-blue bg-rt-blue text-rt-white'
-                      : 'border-rt-border text-rt-text hover:bg-rt-blue-light'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
+      {/* Tool + options row */}
+      <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-rt-text">What do you want to do?</span>
+          <select
+            value={task}
+            onChange={(e) => {
+              setTask(e.target.value);
+              setResult(null);
+              setError(null);
+            }}
+            className="w-full rounded-lg border border-rt-border bg-rt-white p-2.5 text-sm text-rt-text focus:border-rt-blue focus:outline-none focus:ring-1 focus:ring-rt-blue"
+          >
+            {GROUPS.map((g) => (
+              <optgroup key={g} label={g}>
+                {TOOLS.filter((t) => t.group === g).map((t) => (
+                  <option key={t.task} value={t.task}>{t.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
+
+        {canWeb ? (
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-rt-border px-3 py-2.5 text-sm text-rt-text">
+            <input type="checkbox" checked={web} onChange={(e) => setWeb(e.target.checked)} />
+            🌐 Browse the web
+          </label>
+        ) : null}
       </div>
 
-      <p className="mt-4 text-sm text-rt-muted">{active.blurb}</p>
+      <p className="mt-2 text-sm text-rt-muted">{active.blurb}</p>
 
       <textarea
         value={material}
         onChange={(e) => setMaterial(e.target.value)}
         placeholder={active.placeholder}
-        rows={8}
-        className="mt-3 w-full resize-y rounded-lg border border-rt-border bg-rt-white p-3 text-sm text-rt-text focus:border-rt-blue focus:outline-none focus:ring-1 focus:ring-rt-blue"
+        rows={task === 'journal_article' ? 7 : 6}
+        className="mt-3 w-full resize-y rounded-lg border border-rt-border bg-rt-white p-3 text-sm leading-relaxed text-rt-text focus:border-rt-blue focus:outline-none focus:ring-1 focus:ring-rt-blue"
       />
 
-      <div className="mt-3 flex items-center gap-3">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <Button onClick={run} disabled={loading || material.trim().length < 8} size="sm">
-          {loading ? 'Working…' : active.label}
+          {loading ? (canWeb && web ? 'Researching…' : 'Working…') : `Generate ${active.label.toLowerCase()}`}
         </Button>
-        <span className="text-xs text-rt-muted">
-          {words} word{words === 1 ? '' : 's'} · {material.trim().length} characters
-        </span>
+        <span className="text-xs text-rt-muted">{material.trim().length} characters</span>
+        {canWeb && web ? (
+          <span className="text-xs text-rt-muted">Web browsing on — this takes longer and cites live sources.</span>
+        ) : null}
       </div>
 
       {error ? (
@@ -248,10 +228,9 @@ export function AssistantConsole() {
               {copied ? 'Copied' : 'Copy'}
             </Button>
           </div>
-          <div className="mt-3 whitespace-pre-wrap rounded-lg border border-rt-border bg-rt-blue-light/30 p-4 text-sm leading-relaxed text-rt-text">
+          <div className="mt-3 max-h-[32rem] overflow-y-auto whitespace-pre-wrap rounded-lg border border-rt-border bg-rt-blue-light/20 p-4 text-sm leading-relaxed text-rt-text">
             {result.text || 'No output — try adding more detail.'}
           </div>
-
           {result.offline ? (
             <div className="mt-2 text-xs text-rt-muted">
               <p>
@@ -262,29 +241,7 @@ export function AssistantConsole() {
                 <p className="mt-1 font-mono text-rt-error">Provider status: {result.diagnostic}</p>
               ) : null}
             </div>
-          ) : (
-            // Iterative refine — only meaningful with the full provider.
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <input
-                value={directive}
-                onChange={(e) => setDirective(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void refine();
-                }}
-                placeholder="Refine this… e.g. make it shorter, more formal, British spelling"
-                className="min-w-0 flex-1 rounded-lg border border-rt-border bg-rt-white px-3 py-1.5 text-sm text-rt-text focus:border-rt-blue focus:outline-none focus:ring-1 focus:ring-rt-blue"
-              />
-              <Button
-                onClick={refine}
-                disabled={refining || directive.trim().length < 2}
-                size="sm"
-                variant="secondary"
-              >
-                {refining ? 'Refining…' : 'Refine'}
-              </Button>
-            </div>
-          )}
-
+          ) : null}
           <p className="mt-3 text-xs text-rt-muted">{result.disclaimer}</p>
         </div>
       ) : null}

@@ -203,6 +203,30 @@ async function main() {
     const st2 = await core.getFollowState(reg2.researcher.id, reg.researcher.id);
     check('unfollow removes the edge', !st2.isFollowing && st2.followers === st1.followers - 1);
 
+    console.log('\nSaved publications (private bookmarks, §18)');
+    await core.savePublication(reg.researcher.id, created.publicationId);
+    check('save bookmarks a publication', await core.isPublicationSaved(reg.researcher.id, created.publicationId));
+    check(
+      'saved list includes it',
+      (await core.listSavedPublications(reg.researcher.id)).some((s) => s.id === created.publicationId),
+    );
+    await core.unsavePublication(reg.researcher.id, created.publicationId);
+    check('unsave removes the bookmark', !(await core.isPublicationSaved(reg.researcher.id, created.publicationId)));
+
+    console.log('\nFollowing feed (latest from who you follow, §18)');
+    const reg2pub = await core.createManualPublication(reg2.researcher.id, reg2.researcher.displayName, {
+      title: 'Turing on Computation',
+      outputType: 'journal_article',
+    });
+    await core.followResearcher(reg.researcher.id, reg2.researcher.id);
+    const feed = await core.getFollowingFeed(reg.researcher.id, { take: 20 });
+    check(
+      'feed surfaces public work by followed researchers',
+      feed.some((f) => f.id === reg2pub.publicationId),
+      `items=${feed.length}`,
+    );
+    check('empty feed when following no one', (await core.getFollowingFeed(reg2.researcher.id, { take: 5 })).length === 0);
+
     console.log('\nResearch groups');
     const grp = await core.createGroup(reg.researcher.id, { name: 'Psychometrics Lab', interests: 'psychometrics' });
     const groupDetail = await core.getGroupBySlug(grp.slug);

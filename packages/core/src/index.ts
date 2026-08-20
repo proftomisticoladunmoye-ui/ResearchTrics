@@ -31,6 +31,7 @@ export * from './opportunities';
 export * from './opportunity-sources';
 export * from './blog';
 export * from './follow';
+export * from './saves';
 export * from './graph';
 export * from './discovery';
 export * from './openalex-works';

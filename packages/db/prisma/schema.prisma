@@ -436,6 +436,7 @@ model Researcher {
   notifications          Notification[]               @relation("ResearcherNotifications")
   following              Follow[]                     @relation("Following")
   followers              Follow[]                     @relation("Followers")
+  publicationSaves       PublicationSave[]
 
   @@index([familyName])
   @@index([profileStatus])
@@ -680,6 +681,7 @@ model Publication {
   researcherClaims ResearcherPublicationClaim[]
   unifiedRecord    UnifiedWorkRecord?
   notifications    Notification[]
+  savedBy          PublicationSave[]
 
   @@index([publishedYear])
   @@index([journalId])
@@ -1568,4 +1570,19 @@ model Follow {
   @@unique([followerId, followedId])
   @@index([followedId])
   @@map("follows")
+}
+
+/// A researcher bookmarking a publication to read/track later (§18).
+model PublicationSave {
+  id            String   @id @default(uuid())
+  researcherId  String   @map("researcher_id")
+  publicationId String   @map("publication_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  researcher  Researcher  @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@unique([researcherId, publicationId])
+  @@index([researcherId])
+  @@map("publication_saves")
 }

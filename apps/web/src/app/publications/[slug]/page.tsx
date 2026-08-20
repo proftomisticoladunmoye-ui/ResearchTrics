@@ -1,7 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getPublicationBySlug, getEntityMetrics, getFollowState, CITATION_FORMATS, type CitationFormat } from '@researchtrics/core';
+import {
+  getPublicationBySlug,
+  getEntityMetrics,
+  getFollowState,
+  isPublicationSaved,
+  CITATION_FORMATS,
+  type CitationFormat,
+} from '@researchtrics/core';
 import { Card, Badge, DoiBadge, OpenAccessBadge, Button, Avatar } from '@researchtrics/ui';
 import { track } from '@/lib/track';
 import { notifyEngagementFromRequest } from '@/lib/notify';
@@ -9,6 +16,7 @@ import { getCurrentUser } from '@/lib/current-user';
 import { RecommendButton } from '@/components/recommend-button';
 import { ShareButton } from '@/components/share-button';
 import { FollowButton } from '@/components/follow-button';
+import { SaveButton } from '@/components/save-button';
 
 function humanizeType(t: string): string {
   return t.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
@@ -102,6 +110,7 @@ export default async function PublicationPage({
   const authorFollow = canFollowAuthor
     ? await getFollowState(primaryAuthor!.id, viewer!.researcher!.id)
     : null;
+  const saved = viewer?.researcher ? await isPublicationSaved(viewer.researcher.id, p.id) : false;
 
   const scholarlyJsonLd = {
     '@context': 'https://schema.org',
@@ -176,6 +185,7 @@ export default async function PublicationPage({
           </Button>
         ) : null}
         <RecommendButton slug={p.slug} />
+        {viewer?.researcher ? <SaveButton slug={p.slug} initialSaved={saved} /> : null}
         {authorFollow ? (
           <FollowButton
             researcherId={primaryAuthor!.id}

@@ -84,6 +84,57 @@ export async function followResearcher(
   return { following: true };
 }
 
+export interface FeedItem {
+  id: string;
+  slug: string;
+  title: string;
+  year: number | null;
+  venue: string | null;
+  outputType: string;
+  authors: string[];
+}
+
+/**
+ * A home feed of recent publications by the researchers a user follows — the
+ * point of following. Public works only, newest first, deduped across authors.
+ */
+export async function getFollowingFeed(
+  researcherId: string,
+  opts: { take?: number } = {},
+  client: PrismaClient = prisma,
+): Promise<FeedItem[]> {
+  const follows = await client.follow.findMany({
+    where: { followerId: researcherId },
+    select: { followedId: true },
+  });
+  const followedIds = follows.map((f) => f.followedId);
+  if (followedIds.length === 0) return [];
+
+  const pubs = await client.publication.findMany({
+    where: {
+      deletedAt: null,
+      visibility: 'public',
+      authors: { some: { researcherId: { in: followedIds } } },
+    },
+    include: {
+      journal: { select: { name: true } },
+      authors: { orderBy: { authorOrder: 'asc' }, select: { rawName: true }, take: 8 },
+    },
+    orderBy: [{ publishedYear: 'desc' }, { createdAt: 'desc' }],
+    take: opts.take ?? 50,
+  });
+
+  return pubs.map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    title: p.title,
+    year: p.publishedYear,
+    venue: p.journal?.name ?? null,
+    outputType: p.outputType,
+    authors: p.authors.map((a) => a.rawName),
+  }));
+}
+
 /** Unfollow a researcher (idempotent). */
 export async function unfollowResearcher(
   followerId: string,

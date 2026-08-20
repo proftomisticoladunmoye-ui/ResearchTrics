@@ -22,7 +22,9 @@ export interface AccountMenuProps {
 const LINKS: Array<{ href: string; label: string; hint?: string }> = [
   { href: '', label: 'View public profile', hint: 'How the world sees you' },
   { href: '/dashboard', label: 'Dashboard' },
+  { href: '/feed', label: 'Your feed', hint: 'Latest from who you follow' },
   { href: '/dashboard/publications', label: 'My publications', hint: 'Your research outputs' },
+  { href: '/dashboard/saved', label: 'Saved', hint: 'Bookmarked publications' },
   { href: '/dashboard/assistant', label: 'AI Assistant', hint: 'Draft, refine, brainstorm' },
   { href: '/dashboard/rvm', label: 'Research Visibility Metric' },
   { href: '/dashboard/opportunities', label: 'Saved opportunities' },

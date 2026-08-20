@@ -146,7 +146,7 @@ interface AssistantResult {
   disclaimer: string;
 }
 
-export function AssistantConsole() {
+export function AssistantConsole({ webAllowed = true }: { webAllowed?: boolean }) {
   const [task, setTask] = useState<string>('journal_article');
   const [material, setMaterial] = useState('');
   const [web, setWeb] = useState(false);
@@ -159,7 +159,8 @@ export function AssistantConsole() {
   const [refining, setRefining] = useState(false);
 
   const active = useMemo(() => TOOLS.find((t) => t.task === task)!, [task]);
-  const canWeb = !!active.web;
+  const canWeb = !!active.web && webAllowed;
+  const webIsPremium = !!active.web && !webAllowed;
   const canSize = !!active.sized;
 
   async function post(body: Record<string, unknown>): Promise<AssistantResult | null> {
@@ -273,6 +274,14 @@ export function AssistantConsole() {
               <input type="checkbox" checked={web} onChange={(e) => setWeb(e.target.checked)} />
               🌐 Browse the web
             </label>
+          ) : webIsPremium ? (
+            <a
+              href="/pricing"
+              className="flex items-center gap-2 rounded-lg border border-rt-border px-3 py-2 text-sm text-rt-muted hover:text-rt-blue"
+              title="Web browsing is a Premium feature"
+            >
+              🌐 Browse the web <span className="rounded bg-rt-gold-light px-1.5 text-xs text-rt-blue-dark">Premium</span>
+            </a>
           ) : null}
         </div>
       </div>

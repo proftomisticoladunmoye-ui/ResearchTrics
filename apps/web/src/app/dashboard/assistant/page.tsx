@@ -1,6 +1,12 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { getCachedResearcherIntelligence, type CachedIntelligence } from '@researchtrics/core';
+import Link from 'next/link';
+import {
+  getCachedResearcherIntelligence,
+  getPlanStatus,
+  isAdmin,
+  type CachedIntelligence,
+} from '@researchtrics/core';
 import { Card, Badge, Alert } from '@researchtrics/ui';
 import { getCurrentUser } from '@/lib/current-user';
 import { AssistantConsole } from '@/components/assistant-console';
@@ -27,6 +33,7 @@ export default async function AssistantPage() {
     console.warn('AI Assistant: profile insights unavailable —', (err as Error).message);
   }
   const maxWeight = intel ? Math.max(1, ...intel.expertise.map((e) => e.weight)) : 1;
+  const plan = await getPlanStatus(user.researcher.id, isAdmin(user.actor));
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-12">
@@ -37,9 +44,25 @@ export default async function AssistantPage() {
         and never invents your data or results; verify everything before use.
       </p>
 
+      {/* Plan status */}
+      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-rt-border bg-rt-blue-light/20 px-4 py-2 text-sm">
+        <Badge variant={plan.entitlements.plan === 'premium' ? 'gold' : 'neutral'}>
+          {plan.entitlements.plan === 'premium' ? 'Premium' : 'Free plan'}
+        </Badge>
+        <span className="text-rt-muted">
+          {plan.aiRemaining} of {plan.entitlements.aiMonthlyLimit} AI generations left this month
+          {plan.entitlements.webBrowsing ? ' · web browsing on' : ''}
+        </span>
+        {plan.entitlements.plan === 'free' ? (
+          <Link href="/pricing" className="ml-auto font-medium text-rt-blue hover:underline">
+            Upgrade for more + web browsing →
+          </Link>
+        ) : null}
+      </div>
+
       {/* Writing tools — the console carries its own tool picker + guidance */}
-      <div className="mt-6">
-        <AssistantConsole />
+      <div className="mt-4">
+        <AssistantConsole webAllowed={plan.entitlements.webBrowsing} />
       </div>
 
       {/* Grounded interpretation of the researcher's own records — tucked away in

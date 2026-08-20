@@ -234,6 +234,20 @@ async function main() {
     const fset = await core.filterFollowed(reg.researcher.id, [reg2.researcher.id]);
     check('filterFollowed marks who the viewer follows', fset.has(reg2.researcher.id));
 
+    console.log('\nPlans & entitlements (§premium)');
+    const status0 = await core.getPlanStatus(reg.researcher.id, false);
+    check('new researcher is on the free plan with an AI allowance', status0.entitlements.plan === 'free' && status0.aiRemaining === status0.entitlements.aiMonthlyLimit);
+    check('free plan has web browsing off', status0.entitlements.webBrowsing === false);
+    await core.incrementAssistantUsage(reg.researcher.id);
+    const status1 = await core.getPlanStatus(reg.researcher.id, false);
+    check('AI usage is metered against the allowance', status1.aiUsed === 1 && status1.aiRemaining === status0.aiRemaining - 1);
+    check('admin is treated as premium', (await core.getPlanStatus(reg.researcher.id, true)).entitlements.webBrowsing === true);
+    await core.setResearcherPlan(reg.researcher.id, 'premium');
+    const status2 = await core.getPlanStatus(reg.researcher.id, false);
+    check('upgrading to premium unlocks web browsing + higher limit', status2.entitlements.plan === 'premium' && status2.entitlements.webBrowsing === true);
+    await core.setResearcherPlan(reg.researcher.id, 'premium', new Date(Date.now() - 1000));
+    check('an expired premium reverts to free', (await core.getPlanStatus(reg.researcher.id, false)).entitlements.plan === 'free');
+
     console.log('\nResearch groups');
     const grp = await core.createGroup(reg.researcher.id, { name: 'Psychometrics Lab', interests: 'psychometrics' });
     const groupDetail = await core.getGroupBySlug(grp.slug);

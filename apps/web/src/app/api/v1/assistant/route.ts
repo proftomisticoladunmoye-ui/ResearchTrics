@@ -2,6 +2,9 @@ import { type NextRequest } from 'next/server';
 import {
   runAssistantTask,
   ASSISTANT_TASKS,
+  getPlanStatus,
+  incrementAssistantUsage,
+  isAdmin,
   unauthorized,
   badRequest,
   type AssistantTask,
@@ -36,13 +39,25 @@ export async function POST(req: NextRequest) {
       ? (body.length as 'brief' | 'standard' | 'detailed')
       : undefined;
 
+    // Plan gating (§premium): free plans get a monthly AI allowance; web
+    // browsing is premium-only. Admins are treated as premium.
+    const { entitlements, aiRemaining } = await getPlanStatus(user.researcher.id, isAdmin(user.actor));
+    if (aiRemaining <= 0) {
+      throw badRequest(
+        `You've used your ${entitlements.aiMonthlyLimit} AI generations for this month. Upgrade to Premium for more (and web browsing).`,
+      );
+    }
+    const web = body.web === true && entitlements.webBrowsing;
+
     const result = await runAssistantTask(user.researcher.id, {
       task,
       material: String(body.material ?? ''),
       directive: body.directive ? String(body.directive) : undefined,
-      web: body.web === true,
+      web,
       length,
     });
+    // Only meter real (external) generations against the allowance.
+    if (result.external && !result.offline) await incrementAssistantUsage(user.researcher.id);
     return ok(result);
   } catch (err) {
     return fail(err);

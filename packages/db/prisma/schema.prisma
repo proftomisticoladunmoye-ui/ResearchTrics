@@ -306,6 +306,13 @@ enum PublicationClaimStatus {
   review
 }
 
+/// Subscription tier (§premium). Core visibility is always free; premium unlocks
+/// depth (more AI, web browsing, deep analytics, reports).
+enum PlanTier {
+  free
+  premium
+}
+
 // ============================================================
 // Identity & accounts
 // ============================================================
@@ -407,6 +414,10 @@ model Researcher {
   aiSummary      String?   @map("ai_summary")
   aiSummaryModel String?   @map("ai_summary_model")
   aiSummaryAt    DateTime? @map("ai_summary_at")
+
+  // Subscription (§premium). planUntil null = no expiry (or free).
+  plan      PlanTier  @default(free)
+  planUntil DateTime? @map("plan_until")
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -1585,4 +1596,15 @@ model PublicationSave {
   @@unique([researcherId, publicationId])
   @@index([researcherId])
   @@map("publication_saves")
+}
+
+/// Monthly usage counter for metered premium features (e.g. AI generations).
+model AssistantUsage {
+  id           String @id @default(uuid())
+  researcherId String @map("researcher_id")
+  period       String // "YYYY-MM"
+  count        Int    @default(0)
+
+  @@unique([researcherId, period])
+  @@map("assistant_usage")
 }

@@ -227,6 +227,13 @@ async function main() {
     );
     check('empty feed when following no one', (await core.getFollowingFeed(reg2.researcher.id, { take: 5 })).length === 0);
 
+    const followers = await core.listFollowers(reg2.researcher.id);
+    check('follower list includes the follower', followers.some((f) => f.id === reg.researcher.id));
+    const following = await core.listFollowing(reg.researcher.id);
+    check('following list includes the followed', following.some((f) => f.id === reg2.researcher.id));
+    const fset = await core.filterFollowed(reg.researcher.id, [reg2.researcher.id]);
+    check('filterFollowed marks who the viewer follows', fset.has(reg2.researcher.id));
+
     console.log('\nResearch groups');
     const grp = await core.createGroup(reg.researcher.id, { name: 'Psychometrics Lab', interests: 'psychometrics' });
     const groupDetail = await core.getGroupBySlug(grp.slug);

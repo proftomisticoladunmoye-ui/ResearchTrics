@@ -84,6 +84,60 @@ export async function followResearcher(
   return { following: true };
 }
 
+export interface FollowListItem {
+  id: string;
+  slug: string;
+  displayName: string;
+  photoUrl: string | null;
+  academicRank: string | null;
+}
+
+const followSummary = { id: true, slug: true, displayName: true, photoUrl: true, academicRank: true };
+
+/** Researchers who follow this one, newest first. */
+export async function listFollowers(
+  researcherId: string,
+  opts: { take?: number } = {},
+  client: PrismaClient = prisma,
+): Promise<FollowListItem[]> {
+  const rows = await client.follow.findMany({
+    where: { followedId: researcherId },
+    include: { follower: { select: followSummary } },
+    orderBy: { createdAt: 'desc' },
+    take: opts.take ?? 200,
+  });
+  return rows.map((r) => r.follower);
+}
+
+/** Researchers this one follows, newest first. */
+export async function listFollowing(
+  researcherId: string,
+  opts: { take?: number } = {},
+  client: PrismaClient = prisma,
+): Promise<FollowListItem[]> {
+  const rows = await client.follow.findMany({
+    where: { followerId: researcherId },
+    include: { followed: { select: followSummary } },
+    orderBy: { createdAt: 'desc' },
+    take: opts.take ?? 200,
+  });
+  return rows.map((r) => r.followed);
+}
+
+/** Of the given researchers, which the viewer already follows (one query). */
+export async function filterFollowed(
+  viewerResearcherId: string,
+  ids: string[],
+  client: PrismaClient = prisma,
+): Promise<Set<string>> {
+  if (!viewerResearcherId || ids.length === 0) return new Set();
+  const rows = await client.follow.findMany({
+    where: { followerId: viewerResearcherId, followedId: { in: ids } },
+    select: { followedId: true },
+  });
+  return new Set(rows.map((r) => r.followedId));
+}
+
 export interface FeedItem {
   id: string;
   slug: string;

@@ -170,10 +170,13 @@ export default async function ResearcherProfilePage({
             {viewer && !isOwner && viewer.researcher ? (
               <ConnectButton toResearcherId={r.id} />
             ) : null}
-            <span className="text-sm text-rt-muted">
+            <Link href={`/researchers/${r.slug}/followers`} className="text-sm text-rt-muted hover:text-rt-blue">
               <strong className="text-rt-text">{followState.followers.toLocaleString()}</strong>{' '}
               follower{followState.followers === 1 ? '' : 's'}
-            </span>
+            </Link>
+            <Link href={`/researchers/${r.slug}/following`} className="text-sm text-rt-muted hover:text-rt-blue">
+              <strong className="text-rt-text">{followState.following.toLocaleString()}</strong> following
+            </Link>
             <Link
               href={`/researchers/${r.slug}/network`}
               className="text-sm text-rt-blue hover:underline"

@@ -33,6 +33,7 @@ export * from './blog';
 export * from './follow';
 export * from './saves';
 export * from './plans';
+export * from './reports';
 export * from './graph';
 export * from './discovery';
 export * from './openalex-works';

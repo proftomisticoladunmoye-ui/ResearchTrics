@@ -205,6 +205,9 @@ export default async function ResearcherProfilePage({
           <Button asChild size="sm" variant="ghost">
             <Link href="/dashboard/rvm">Visibility (RVM)</Link>
           </Button>
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/dashboard/report">Impact report</Link>
+          </Button>
         </div>
       ) : null}
 

@@ -27,6 +27,7 @@ const LINKS: Array<{ href: string; label: string; hint?: string }> = [
   { href: '/dashboard/saved', label: 'Saved', hint: 'Bookmarked publications' },
   { href: '/dashboard/assistant', label: 'AI Assistant', hint: 'Draft, refine, brainstorm' },
   { href: '/dashboard/rvm', label: 'Research Visibility Metric' },
+  { href: '/dashboard/report', label: 'Impact report', hint: 'Shareable PDF for grants & tenure' },
   { href: '/dashboard/opportunities', label: 'Saved opportunities' },
   { href: '/dashboard/analytics', label: 'Analytics' },
   { href: '/dashboard/profile', label: 'Settings' },

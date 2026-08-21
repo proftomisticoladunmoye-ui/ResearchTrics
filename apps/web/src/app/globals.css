@@ -37,3 +37,22 @@
     outline-offset: 2px;
   }
 }
+
+/* Print: strip the site chrome so reports export as clean PDFs. */
+@media print {
+  header,
+  footer,
+  nav[aria-label='Primary mobile'],
+  .no-print {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  body {
+    background: #fff;
+  }
+  article {
+    border: none !important;
+  }
+}

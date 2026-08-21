@@ -1046,6 +1046,22 @@ async function main() {
       listed.items.length >= 1 && 'photoUrl' in listed.items[0]!,
     );
 
+    console.log('\nImpact report (§premium)');
+    const reportDeep = await core.buildImpactReport(reg.researcher.id, { deep: true });
+    check(
+      'report assembles headline metrics + top works',
+      reportDeep.researcher.researchtricsId === reg.researcher.researchtricsId &&
+        reportDeep.metrics.publications >= 1 &&
+        reportDeep.topPublications.length >= 1,
+      `pubs=${reportDeep.metrics.publications}`,
+    );
+    check(
+      'deep report includes reach-by-country',
+      Array.isArray(reportDeep.reachByCountry) && reportDeep.reachByCountry!.some((c) => c.country === 'Germany'),
+    );
+    const reportFree = await core.buildImpactReport(reg.researcher.id, { deep: false });
+    check('free report withholds reach-by-country', reportFree.reachByCountry === null);
+
     await prisma.$disconnect();
   } finally {
     // embedded-postgres deletes its data dir on stop; on Windows a lingering

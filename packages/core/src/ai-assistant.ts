@@ -526,7 +526,7 @@ export async function runAssistantChat(
     facts,
     messages,
     web: input.web ?? false,
-    maxTokens: 2500,
+    maxTokens: 4000,
     containsPrivate: false,
   };
 

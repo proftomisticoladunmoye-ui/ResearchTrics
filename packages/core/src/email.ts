@@ -26,14 +26,21 @@ export class ConsoleEmailProvider implements EmailProvider {
   }
 }
 
-let provider: EmailProvider = new ConsoleEmailProvider();
+let provider: EmailProvider | null = null;
 
-/** Override the active provider (e.g. wire a real transport at startup). */
+/** Override the active provider (e.g. a test stub, or a specific transport). */
 export function setEmailProvider(next: EmailProvider): void {
   provider = next;
 }
 
+/**
+ * The active email provider. If none was explicitly set, it is resolved from the
+ * environment on first use (Resend when EMAIL_PROVIDER=resend + EMAIL_API_KEY,
+ * else console). This means every consumer — web and worker — sends real email
+ * when the env is configured, without needing an explicit startup call.
+ */
 export function getEmailProvider(): EmailProvider {
+  if (!provider) provider = emailProviderFromEnv();
   return provider;
 }
 

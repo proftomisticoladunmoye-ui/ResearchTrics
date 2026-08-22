@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { prisma } from '@researchtrics/db';
 import { MetricCard, Card, Button } from '@researchtrics/ui';
 import { DigestTriggerButton } from '@/components/digest-trigger-button';
+import { EmailTestButton } from '@/components/email-test-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,8 +30,9 @@ export default async function AdminOverviewPage() {
           Send the weekly summary now (to verified users with recent read/recommend activity).
           Needs the worker&rsquo;s email transport configured (EMAIL_PROVIDER=resend).
         </p>
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-start gap-3">
           <DigestTriggerButton />
+          <EmailTestButton />
         </div>
       </Card>
 

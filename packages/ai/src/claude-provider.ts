@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { AIProvider, AIGeneration, GroundedContext } from './types';
-import { buildGroundedMessages } from './prompts';
+import { buildGroundedMessages, buildChatSystem } from './prompts';
 
 export interface ClaudeProviderOptions {
   apiKey: string;
@@ -34,7 +34,11 @@ export class ClaudeProvider implements AIProvider {
     }
 
     const mode = ctx.mode ?? 'summary';
-    const { system, user } = buildGroundedMessages(ctx);
+    const chat = ctx.messages && ctx.messages.length > 0;
+    const system = chat ? buildChatSystem(ctx) : buildGroundedMessages(ctx).system;
+    const messages = chat
+      ? ctx.messages!.map((m) => ({ role: m.role, content: m.content }))
+      : [{ role: 'user' as const, content: buildGroundedMessages(ctx).user }];
 
     const response = await this.client.messages.create({
       model: this.model,
@@ -42,7 +46,7 @@ export class ClaudeProvider implements AIProvider {
       thinking: { type: 'adaptive' },
       output_config: { effort: mode === 'assist' ? 'medium' : 'low' },
       system,
-      messages: [{ role: 'user', content: user }],
+      messages,
     });
 
     const text = response.content

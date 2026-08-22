@@ -346,6 +346,28 @@ async function main() {
     });
     check('refine runs with a directive and returns text', refined.text.length > 0 && !!refined.disclaimer);
 
+    // Conversational chat: multi-turn, plan-metered, never fabricates.
+    const chat = await core.runAssistantChat(reg.researcher.id, {
+      messages: [
+        { role: 'user', content: 'What research questions could I explore about anxiety scales?' },
+        { role: 'assistant', content: 'A few directions worth considering…' },
+        { role: 'user', content: 'Refine the first one to be more specific.' },
+      ],
+    });
+    check('assistant chat returns text with a disclaimer + provider label', chat.text.length > 0 && !!chat.disclaimer && !!chat.model);
+    let chatNeedsMessage = false;
+    await core.runAssistantChat(reg.researcher.id, { messages: [] }).catch(() => {
+      chatNeedsMessage = true;
+    });
+    check('assistant chat rejects an empty conversation (BAD_REQUEST)', chatNeedsMessage);
+    let chatLastMustBeUser = false;
+    await core
+      .runAssistantChat(reg.researcher.id, { messages: [{ role: 'assistant', content: 'Hello there.' }] })
+      .catch(() => {
+        chatLastMustBeUser = true;
+      });
+    check('assistant chat requires the last turn to be from the user (BAD_REQUEST)', chatLastMustBeUser);
+
     console.log('\nInstitutional platform (tenant-scoped, grounded)');
     const institution = await core.findOrCreateInstitutionByName('Smoke University', { country: 'GB' });
     await core.addAffiliation({ researcherId: reg.researcher.id, institutionId: institution.id, verified: true });

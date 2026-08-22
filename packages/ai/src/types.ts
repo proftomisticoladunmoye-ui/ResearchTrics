@@ -33,6 +33,12 @@ export interface GroundedFact {
  */
 export type GenerationMode = 'summary' | 'assist';
 
+/** One turn in a chat conversation. */
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 /** Everything a provider is permitted to see and use for one generation. */
 export interface GroundedContext {
   /** Machine task key, e.g. `profile-summary` or `assist:abstract`. */
@@ -53,6 +59,12 @@ export interface GroundedContext {
    * refine, never as a claim to verify.
    */
   material?: string;
+  /**
+   * Chat mode: a multi-turn conversation. When present, the provider sends the
+   * whole history (with a research-assistant system prompt) instead of a single
+   * instruction, so the assistant remembers earlier turns.
+   */
+  messages?: ChatMessage[];
   /**
    * Assist mode only: allow the provider to browse the web for real, current
    * sources and cite them (grounding, not fabrication). Supported by gateways

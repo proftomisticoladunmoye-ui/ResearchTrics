@@ -1,5 +1,11 @@
 import { prisma, type PrismaClient } from '@researchtrics/db';
-import { createAIProvider, LocalProvider, type GroundedContext, type GroundedFact } from '@researchtrics/ai';
+import {
+  createAIProvider,
+  LocalProvider,
+  type GroundedContext,
+  type GroundedFact,
+  type ChatMessage,
+} from '@researchtrics/ai';
 import { loadServerEnv } from '@researchtrics/config';
 import { badRequest, notFound } from './errors';
 import { logger } from './logger';
@@ -471,5 +477,73 @@ export async function runAssistantTask(
       diagnostic: `provider call failed: ${(err as Error).message.slice(0, 200)}`,
       disclaimer: DISCLAIMER,
     };
+  }
+}
+
+/**
+ * Conversational assistant (§29, §48). A multi-turn research chat: the whole
+ * history is sent each turn so the assistant remembers the discussion. Same
+ * never-fabricate contract; web browsing (premium) grounds answers in real
+ * sources. Falls back to a helpful note when no external provider is configured.
+ */
+export async function runAssistantChat(
+  researcherId: string,
+  input: { messages: ChatMessage[]; web?: boolean },
+  client: PrismaClient = prisma,
+): Promise<AssistantResult> {
+  const raw = Array.isArray(input.messages) ? input.messages : [];
+  const messages = raw
+    .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+    .map((m) => ({ role: m.role, content: m.content.trim().slice(0, 8000) }))
+    .filter((m) => m.content.length > 0)
+    .slice(-16); // keep recent context; bound token cost
+  if (messages.length === 0 || messages[messages.length - 1]!.role !== 'user') {
+    throw badRequest('Send a message to the assistant.');
+  }
+
+  const facts = await authorFacts(researcherId, client);
+  const { provider, fellBack, note } = resolveProvider();
+
+  const offline = (diagnostic?: string): AssistantResult => ({
+    task: 'refine',
+    text:
+      'The AI chat needs the full AI provider enabled. Ask an administrator to configure it, or use the on-platform writing tools.',
+    model: 'local',
+    providerName: 'local',
+    external: false,
+    fellBack,
+    offline: true,
+    ...(diagnostic ? { diagnostic } : {}),
+    disclaimer: DISCLAIMER,
+  });
+
+  if (!provider.external) return offline(note);
+
+  const ctx: GroundedContext = {
+    task: 'assist:chat',
+    mode: 'assist',
+    instruction: 'Continue the research conversation helpfully.',
+    facts,
+    messages,
+    web: input.web ?? false,
+    maxTokens: 2500,
+    containsPrivate: false,
+  };
+
+  try {
+    const generation = await provider.generateGrounded(ctx);
+    return {
+      task: 'refine',
+      text: generation.text,
+      model: generation.model,
+      providerName: provider.name,
+      external: generation.external,
+      fellBack,
+      offline: false,
+      disclaimer: DISCLAIMER,
+    };
+  } catch (err) {
+    logger.warn({ err }, 'Assistant chat provider failed');
+    return offline(`provider call failed: ${(err as Error).message.slice(0, 200)}`);
   }
 }

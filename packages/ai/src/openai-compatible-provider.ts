@@ -1,5 +1,5 @@
 import type { AIProvider, AIGeneration, GroundedContext } from './types';
-import { buildGroundedMessages } from './prompts';
+import { buildGroundedMessages, buildChatSystem } from './prompts';
 
 /**
  * OpenAI-compatible chat provider (Spec §48) — talks the `/chat/completions`
@@ -66,7 +66,6 @@ export class OpenAICompatibleProvider implements AIProvider {
     }
 
     const mode = ctx.mode ?? 'summary';
-    const { system, user } = buildGroundedMessages(ctx);
 
     const headers: Record<string, string> = {
       'content-type': 'application/json',
@@ -75,15 +74,24 @@ export class OpenAICompatibleProvider implements AIProvider {
     if (this.referer) headers['HTTP-Referer'] = this.referer;
     if (this.title) headers['X-Title'] = this.title;
 
+    // Chat mode sends the whole conversation; single-shot mode sends system+user.
+    const messages =
+      ctx.messages && ctx.messages.length > 0
+        ? [{ role: 'system' as const, content: buildChatSystem(ctx) }, ...ctx.messages]
+        : (() => {
+            const { system, user } = buildGroundedMessages(ctx);
+            return [
+              { role: 'system' as const, content: system },
+              { role: 'user' as const, content: user },
+            ];
+          })();
+
     const maxTokens = ctx.maxTokens ?? (mode === 'assist' ? 2000 : 1500);
     const body: Record<string, unknown> = {
       model: this.model,
       max_tokens: maxTokens,
       temperature: mode === 'assist' ? 0.4 : 0.2,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
+      messages,
     };
     // Web browsing: OpenRouter's web plugin fetches real sources and returns
     // citations, so the model grounds in the live web rather than guessing.

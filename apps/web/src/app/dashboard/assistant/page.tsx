@@ -9,7 +9,7 @@ import {
 } from '@researchtrics/core';
 import { Card, Badge, Alert } from '@researchtrics/ui';
 import { getCurrentUser } from '@/lib/current-user';
-import { AssistantConsole } from '@/components/assistant-console';
+import { AssistantTabs } from '@/components/assistant-tabs';
 
 export const metadata: Metadata = {
   title: 'AI Assistant',
@@ -39,9 +39,10 @@ export default async function AssistantPage() {
     <div className="mx-auto max-w-4xl px-4 py-12">
       <h1 className="text-2xl font-semibold text-rt-text">AI Assistant</h1>
       <p className="mt-1 max-w-2xl text-sm text-rt-muted">
-        Draft full journal articles, refine your writing, and plan research — optionally{' '}
-        <strong>browsing the web</strong> for real, current sources. It works from your own material
-        and never invents your data or results; verify everything before use.
+        Chat about anything in your research, or use the writing tools to draft full journal
+        articles, refine your writing, and plan — optionally <strong>browsing the web</strong> for
+        real, current sources. It remembers your conversation and never invents your data, results,
+        or citations; verify everything before use.
       </p>
 
       {/* Plan status */}
@@ -60,9 +61,9 @@ export default async function AssistantPage() {
         ) : null}
       </div>
 
-      {/* Writing tools — the console carries its own tool picker + guidance */}
+      {/* Chat + writing tools — the tabs carry their own guidance */}
       <div className="mt-4">
-        <AssistantConsole webAllowed={plan.entitlements.webBrowsing} />
+        <AssistantTabs webAllowed={plan.entitlements.webBrowsing} />
       </div>
 
       {/* Grounded interpretation of the researcher's own records — tucked away in

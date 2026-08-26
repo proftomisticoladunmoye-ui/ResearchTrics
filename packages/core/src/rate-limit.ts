@@ -147,6 +147,8 @@ export const RATE_LIMITS = {
   publicApi: { limit: 120, windowMs: 60_000 },
   /** AI Assistant generations per user — bounds external-provider cost/abuse. */
   assistant: { limit: 30, windowMs: 10 * 60_000 },
+  /** Resend of the email-verification link per user — prevents inbox spam. */
+  'resend-verification': { limit: 5, windowMs: 60 * 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

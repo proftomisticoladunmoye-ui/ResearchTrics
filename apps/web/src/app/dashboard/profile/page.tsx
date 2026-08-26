@@ -7,6 +7,7 @@ import { getCurrentUser } from '@/lib/current-user';
 import { ProfileEditForm } from '@/components/profile-edit-form';
 import { PhotoUpload } from '@/components/photo-upload';
 import { AffiliationManager } from '@/components/affiliation-manager';
+import { ResendVerification } from '@/components/resend-verification';
 
 export const metadata: Metadata = {
   title: 'Edit profile',
@@ -67,6 +68,22 @@ export default async function DashboardProfilePage({
         <div className="mt-4">
           <Alert variant={orcidMsg.variant}>{orcidMsg.text}</Alert>
         </div>
+      ) : null}
+
+      {/* Get verified (Spec §38). Email verification is Level 1 — the path
+          available to everyone. Shown until the researcher reaches it. */}
+      {researcher.verificationLevel < 1 ? (
+        <Card className="mt-6 border-rt-gold/40 bg-rt-gold-light/20 p-5">
+          <h2 className="text-base font-semibold text-rt-text">Get verified</h2>
+          <p className="mt-1 text-sm text-rt-muted">
+            Your account is <strong>Unverified</strong>. Verify your email to reach{' '}
+            <strong>Level 1</strong> — it confirms you control this address and unlocks a verified
+            badge on your public profile. Connecting ORCID later raises you to Level 3.
+          </p>
+          <div className="mt-3">
+            <ResendVerification email={user.email} />
+          </div>
+        </Card>
       ) : null}
 
       {/* Scholarly identity connections (Spec §7, §13) */}

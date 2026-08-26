@@ -1121,6 +1121,23 @@ async function main() {
       freshChecklist.length === 5 && freshChecklist.every((s) => !s.done),
     );
 
+    // Verification: a new account is Level 0 (Unverified) — this is what drives
+    // the "Get verified" prompt. Email verification is the Level 1 path.
+    const newbieLevel = await prisma.researcher.findUnique({
+      where: { id: newbie.researcher.id },
+      select: { verificationLevel: true },
+    });
+    check('a brand-new researcher starts Unverified (Level 0)', newbieLevel?.verificationLevel === 0);
+    await core.issueEmailVerification(newbie.user.id, 'newbie@example.org', 'https://researchtrics.com');
+    const issuedToken = await prisma.verificationToken.findFirst({
+      where: { userId: newbie.user.id, purpose: 'email' },
+      orderBy: { createdAt: 'desc' },
+    });
+    check('issuing verification stores a single-use email token', !!issuedToken && !issuedToken.usedAt);
+    // The resend rate limit is registered so the endpoint can throttle abuse.
+    const rl = await core.checkRateLimit('resend-verification', `user:${newbie.user.id}`);
+    check('resend-verification rate limit is wired', rl.allowed === true);
+
     console.log('\nImpact report (§premium)');
     const reportDeep = await core.buildImpactReport(reg.researcher.id, { deep: true });
     check(

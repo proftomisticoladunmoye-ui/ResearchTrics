@@ -38,6 +38,54 @@ export async function getResearcherByUserId(
   });
 }
 
+/** A single onboarding step and whether the researcher has completed it. */
+export interface OnboardingStep {
+  key: 'profile' | 'orcid' | 'affiliation' | 'publications' | 'outputs';
+  label: string;
+  href: string;
+  done: boolean;
+}
+
+/**
+ * Compute the researcher's real onboarding state so the dashboard "Next steps"
+ * reflects what they have actually done (rather than a static list). Each step
+ * is a concrete, checkable signal. Steps already completed are marked done so
+ * the UI can hide them and congratulate a fully set-up researcher.
+ */
+export async function getOnboardingChecklist(
+  researcherId: string,
+  client: PrismaClient = prisma,
+): Promise<OnboardingStep[]> {
+  const [researcher, affiliations, publications, projects, datasets, instruments, software, orcidConnection] =
+    await Promise.all([
+      client.researcher.findUnique({
+        where: { id: researcherId },
+        select: { biography: true, identifiers: { where: { scheme: 'orcid' }, select: { verified: true } } },
+      }),
+      client.affiliation.count({ where: { researcherId } }),
+      client.publicationAuthor.count({
+        where: { researcherId, publication: { deletedAt: null } },
+      }),
+      client.project.count({ where: { piResearcherId: researcherId } }),
+      client.dataset.count({ where: { creatorResearcherId: researcherId } }),
+      client.instrument.count({ where: { authorResearcherId: researcherId } }),
+      client.software.count({ where: { authorResearcherId: researcherId } }),
+      client.orcidConnection.findFirst({ where: { researcherId }, select: { id: true } }),
+    ]);
+
+  const hasBiography = !!researcher?.biography && researcher.biography.trim().length > 0;
+  const hasOrcid = !!orcidConnection || (researcher?.identifiers.some((i) => i.verified) ?? false);
+  const outputsTotal = projects + datasets + instruments + software;
+
+  return [
+    { key: 'profile', label: 'Complete your profile (bio, photo, interests)', href: '/dashboard/profile', done: hasBiography },
+    { key: 'orcid', label: 'Connect your ORCID iD', href: '/dashboard/profile', done: hasOrcid },
+    { key: 'affiliation', label: 'Add your institutional affiliation', href: '/dashboard/profile', done: affiliations > 0 },
+    { key: 'publications', label: 'Add your publications (import by DOI or upload)', href: '/dashboard/publications', done: publications > 0 },
+    { key: 'outputs', label: 'Add a project, dataset, instrument, or software', href: '/dashboard/outputs', done: outputsTotal > 0 },
+  ];
+}
+
 /** One publication as shown on a researcher's profile. */
 export interface ProfilePublication {
   id: string;

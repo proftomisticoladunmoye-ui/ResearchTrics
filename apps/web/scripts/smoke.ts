@@ -1099,6 +1099,28 @@ async function main() {
       listed.items.length >= 1 && 'photoUrl' in listed.items[0]!,
     );
 
+    // Dashboard "Next steps" reflects REAL state, not a static list.
+    const checklist = await core.getOnboardingChecklist(reg.researcher.id);
+    check('onboarding checklist covers all five steps', checklist.length === 5);
+    check(
+      'checklist marks publications done once a work exists',
+      checklist.find((s) => s.key === 'publications')?.done === true,
+    );
+    check(
+      'checklist marks affiliation done for an affiliated researcher',
+      checklist.find((s) => s.key === 'affiliation')?.done === true,
+    );
+    const newbie = await core.registerResearcher({
+      email: 'newbie@example.org',
+      password: 'freshstart8!',
+      displayName: 'Newbie Researcher',
+    });
+    const freshChecklist = await core.getOnboardingChecklist(newbie.researcher.id);
+    check(
+      'a brand-new researcher has every onboarding step still to do',
+      freshChecklist.length === 5 && freshChecklist.every((s) => !s.done),
+    );
+
     console.log('\nImpact report (§premium)');
     const reportDeep = await core.buildImpactReport(reg.researcher.id, { deep: true });
     check(

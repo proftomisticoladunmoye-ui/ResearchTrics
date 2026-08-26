@@ -2,7 +2,12 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Card, MetricCard, Badge, Button } from '@researchtrics/ui';
-import { getResearcherAnalytics, administeredInstitutionIds } from '@researchtrics/core';
+import {
+  getResearcherAnalytics,
+  administeredInstitutionIds,
+  getOnboardingChecklist,
+  type OnboardingStep,
+} from '@researchtrics/core';
 import { getCurrentUser } from '@/lib/current-user';
 
 export const metadata: Metadata = {
@@ -19,6 +24,11 @@ export default async function DashboardPage() {
   const name = user.researcher?.displayName ?? user.email;
   const analytics = user.researcher ? await getResearcherAnalytics(user.researcher.id, 30) : null;
   const administersInstitution = administeredInstitutionIds(user.actor).length > 0;
+  const onboarding: OnboardingStep[] = user.researcher
+    ? await getOnboardingChecklist(user.researcher.id)
+    : [];
+  const remainingSteps = onboarding.filter((s) => !s.done);
+  const completedCount = onboarding.length - remainingSteps.length;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12">
@@ -88,34 +98,52 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      <Card className="mt-8 p-6">
-        <h2 className="text-base font-semibold text-rt-text">Next steps</h2>
-        <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-rt-muted">
-          <li>
-            <Link href="/dashboard/profile" className="text-rt-blue hover:underline">
-              Complete your profile and connect your ORCID iD
-            </Link>
-            .
-          </li>
-          <li>Add your institutional affiliation.</li>
-          <li>
-            <Link href="/dashboard/publications" className="text-rt-blue hover:underline">
-              Import your publications by DOI
-            </Link>
-            .
-          </li>
-          <li>
-            <Link href="/dashboard/outputs" className="text-rt-blue hover:underline">
-              Add a project, dataset, instrument, or software
-            </Link>
-            .
-          </li>
-        </ul>
-        <p className="mt-4 text-xs text-rt-muted">
-          Foundation build — profile, identity, and integration features arrive in subsequent
-          phases per the roadmap.
-        </p>
-      </Card>
+      {user.researcher ? (
+        <Card className="mt-8 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-rt-text">
+              {remainingSteps.length === 0 ? 'Your profile is all set' : 'Next steps'}
+            </h2>
+            {onboarding.length > 0 ? (
+              <span className="text-xs text-rt-muted">
+                {completedCount} of {onboarding.length} complete
+              </span>
+            ) : null}
+          </div>
+
+          {remainingSteps.length === 0 ? (
+            <p className="mt-3 text-sm text-rt-muted">
+              You&rsquo;ve completed every setup step — your profile, ORCID, affiliation,
+              publications, and outputs are in place. Keep your work up to date to grow your
+              visibility.
+            </p>
+          ) : (
+            <ul className="mt-3 space-y-2 text-sm">
+              {remainingSteps.map((step) => (
+                <li key={step.key} className="flex items-start gap-2 text-rt-muted">
+                  <span aria-hidden className="mt-0.5 text-rt-muted">○</span>
+                  <Link href={step.href} className="text-rt-blue hover:underline">
+                    {step.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {completedCount > 0 && remainingSteps.length > 0 ? (
+            <ul className="mt-4 space-y-1 border-t border-rt-border pt-4 text-sm text-rt-muted">
+              {onboarding
+                .filter((s) => s.done)
+                .map((step) => (
+                  <li key={step.key} className="flex items-start gap-2">
+                    <span aria-hidden className="mt-0.5 text-rt-success">✓</span>
+                    <span className="line-through decoration-rt-border">{step.label}</span>
+                  </li>
+                ))}
+            </ul>
+          ) : null}
+        </Card>
+      ) : null}
     </div>
   );
 }

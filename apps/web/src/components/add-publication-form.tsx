@@ -1,8 +1,22 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Input, Field, Alert } from '@researchtrics/ui';
+
+interface CoAuthor {
+  name: string;
+  orcid: string;
+  /** Set when linked to a ResearchTrics profile — the work then counts for them. */
+  researcherId?: string | null;
+}
+
+interface Suggestion {
+  id: string;
+  displayName: string;
+  academicRank: string | null;
+  country: string | null;
+}
 
 const OUTPUT_TYPES: Array<{ value: string; label: string }> = [
   { value: 'journal_article', label: 'Journal article' },
@@ -26,11 +40,11 @@ export function AddPublicationForm() {
   const router = useRouter();
   const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle');
   const [message, setMessage] = useState<string | null>(null);
-  const [coAuthors, setCoAuthors] = useState<Array<{ name: string; orcid: string }>>([]);
+  const [coAuthors, setCoAuthors] = useState<CoAuthor[]>([]);
 
-  const addCoAuthor = () => setCoAuthors((cs) => [...cs, { name: '', orcid: '' }]);
-  const updateCoAuthor = (i: number, key: 'name' | 'orcid', value: string) =>
-    setCoAuthors((cs) => cs.map((c, idx) => (idx === i ? { ...c, [key]: value } : c)));
+  const addCoAuthor = () => setCoAuthors((cs) => [...cs, { name: '', orcid: '', researcherId: null }]);
+  const updateCoAuthor = (i: number, patch: Partial<CoAuthor>) =>
+    setCoAuthors((cs) => cs.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
   const removeCoAuthor = (i: number) => setCoAuthors((cs) => cs.filter((_, idx) => idx !== i));
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -76,9 +90,13 @@ export function AddPublicationForm() {
       };
 
       const cleanCoAuthors = coAuthors
-        .map((c) => ({ name: c.name.trim(), orcid: c.orcid.trim() }))
+        .map((c) => ({ name: c.name.trim(), orcid: c.orcid.trim(), researcherId: c.researcherId ?? null }))
         .filter((c) => c.name.length > 0)
-        .map((c) => ({ name: c.name, ...(c.orcid ? { orcid: c.orcid } : {}) }));
+        .map((c) => ({
+          name: c.name,
+          ...(c.orcid ? { orcid: c.orcid } : {}),
+          ...(c.researcherId ? { researcherId: c.researcherId } : {}),
+        }));
       if (cleanCoAuthors.length) payload.coAuthors = cleanCoAuthors;
 
       const res = await fetch('/api/v1/publications/manual', {
@@ -135,36 +153,23 @@ export function AddPublicationForm() {
         <textarea id="abstract" name="abstract" rows={3} maxLength={10000} className={inputClass} />
       </Field>
 
-      {/* Co-authors — so you aren't shown as the sole author */}
+      {/* Co-authors — so you aren't shown as the sole author, and so the work
+          counts on your co-authors' profiles too. */}
       <div className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-rt-text">Co-authors</span>
         <span className="-mt-1 text-xs text-rt-muted">
-          Add everyone who authored this work. An ORCID links a co-author to their ResearchTrics profile.
+          Add everyone who authored this work. Search to link a co-author who is on ResearchTrics —
+          the publication then counts on their profile too, and they’re notified. An ORCID also links
+          them; a plain name is stored for off-platform authors.
         </span>
         {coAuthors.map((c, i) => (
-          <div key={i} className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_170px_auto]">
-            <Input
-              aria-label={`Co-author ${i + 1} name`}
-              value={c.name}
-              onChange={(e) => updateCoAuthor(i, 'name', e.target.value)}
-              maxLength={200}
-              placeholder="Full name"
-            />
-            <Input
-              aria-label={`Co-author ${i + 1} ORCID`}
-              value={c.orcid}
-              onChange={(e) => updateCoAuthor(i, 'orcid', e.target.value)}
-              maxLength={40}
-              placeholder="ORCID (optional)"
-            />
-            <button
-              type="button"
-              onClick={() => removeCoAuthor(i)}
-              className="justify-self-start text-sm text-rt-error hover:underline"
-            >
-              Remove
-            </button>
-          </div>
+          <CoAuthorRow
+            key={i}
+            index={i}
+            value={c}
+            onChange={(patch) => updateCoAuthor(i, patch)}
+            onRemove={() => removeCoAuthor(i)}
+          />
         ))}
         <button
           type="button"
@@ -189,5 +194,134 @@ export function AddPublicationForm() {
       </Button>
       {message ? <Alert variant="error">{message}</Alert> : null}
     </form>
+  );
+}
+
+/**
+ * One co-author input row with a platform typeahead. Typing a name searches
+ * ResearchTrics profiles; selecting one links the co-author (captures their
+ * researcherId) so the work counts for them. Selection can be cleared to revert
+ * to a plain off-platform name.
+ */
+function CoAuthorRow({
+  index,
+  value,
+  onChange,
+  onRemove,
+}: {
+  index: number;
+  value: CoAuthor;
+  onChange: (patch: Partial<CoAuthor>) => void;
+  onRemove: () => void;
+}) {
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [open, setOpen] = useState(false);
+  const linked = !!value.researcherId;
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  // Debounced search — skip while a profile is already linked.
+  useEffect(() => {
+    if (linked) {
+      setSuggestions([]);
+      return;
+    }
+    const q = value.name.trim();
+    if (q.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/v1/researchers/search?q=${encodeURIComponent(q)}`, {
+          signal: ctrl.signal,
+        });
+        if (!res.ok) return;
+        const body = (await res.json()) as { data?: { items: Suggestion[] } };
+        setSuggestions(body.data?.items ?? []);
+        setOpen(true);
+      } catch {
+        /* aborted or offline — ignore */
+      }
+    }, 250);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [value.name, linked]);
+
+  // Close the dropdown on outside click.
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  return (
+    <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_170px_auto]">
+      <div ref={boxRef} className="relative">
+        <Input
+          aria-label={`Co-author ${index + 1} name`}
+          value={value.name}
+          onChange={(e) => onChange({ name: e.target.value, researcherId: null })}
+          onFocus={() => suggestions.length > 0 && setOpen(true)}
+          maxLength={200}
+          placeholder="Full name — search to link their profile"
+          autoComplete="off"
+        />
+        {linked ? (
+          <div className="mt-1 flex items-center gap-2 text-xs text-rt-blue">
+            <span className="rounded bg-rt-blue-light px-1.5 py-0.5 font-medium">✓ Linked profile</span>
+            <button
+              type="button"
+              onClick={() => onChange({ researcherId: null })}
+              className="text-rt-muted hover:underline"
+            >
+              Unlink
+            </button>
+          </div>
+        ) : null}
+        {open && !linked && suggestions.length > 0 ? (
+          <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-rt-border bg-rt-white shadow-lg">
+            {suggestions.map((s) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange({ name: s.displayName, researcherId: s.id, orcid: '' });
+                    setOpen(false);
+                  }}
+                  className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-rt-blue-light/30"
+                >
+                  <span className="font-medium text-rt-text">{s.displayName}</span>
+                  {s.academicRank || s.country ? (
+                    <span className="text-xs text-rt-muted">
+                      {[s.academicRank, s.country].filter(Boolean).join(' · ')}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      <Input
+        aria-label={`Co-author ${index + 1} ORCID`}
+        value={value.orcid}
+        onChange={(e) => onChange({ orcid: e.target.value })}
+        maxLength={40}
+        placeholder="ORCID (optional)"
+        disabled={linked}
+      />
+      <button
+        type="button"
+        onClick={onRemove}
+        className="justify-self-start text-sm text-rt-error hover:underline"
+      >
+        Remove
+      </button>
+    </div>
   );
 }

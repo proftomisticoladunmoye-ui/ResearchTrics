@@ -1523,6 +1523,7 @@ enum NotificationType {
   opportunity_match
   collaboration_request
   follow
+  coauthor_added
 }
 
 model Notification {

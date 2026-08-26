@@ -227,6 +227,37 @@ async function main() {
     );
     check('empty feed when following no one', (await core.getFollowingFeed(reg2.researcher.id, { take: 5 })).length === 0);
 
+    // Shared authorship: when one co-author uploads, it counts for the rest.
+    const shared = await core.createManualPublication(reg.researcher.id, reg.researcher.displayName, {
+      title: 'A Jointly Authored Study',
+      outputType: 'journal_article',
+      coAuthors: [
+        { name: reg2.researcher.displayName, researcherId: reg2.researcher.id }, // linked from platform
+        { name: 'Off-platform Person' }, // stays unlinked
+      ],
+    });
+    const reg2Pubs = await core.listResearcherPublications(reg2.researcher.id, { take: 50 });
+    check(
+      'linked co-author gets the uploaded work on their own profile',
+      reg2Pubs.some((p) => p.id === shared.publicationId),
+    );
+    const reg2Analytics = await core.getResearcherAnalytics(reg2.researcher.id);
+    check('shared work counts toward the co-author publication total', reg2Analytics.publicationCount >= 1);
+    check(
+      'co-author is notified of being added to the shared work',
+      (await core.listNotifications(reg2.researcher.id)).some(
+        (n) => n.type === 'coauthor_added' && n.publicationTitle === 'A Jointly Authored Study',
+      ),
+    );
+    // The uploader must never fabricate someone else's authorship silently: a
+    // co-author can detach themselves, and the shared record survives.
+    const detach = await core.removePublicationForResearcher(reg2.researcher.id, shared.publicationId);
+    check('a wrongly-tagged co-author can remove themselves (record preserved)', detach.unlinked && !detach.deleted);
+    check(
+      'after removal the work no longer counts for that co-author',
+      !(await core.listResearcherPublications(reg2.researcher.id, { take: 50 })).some((p) => p.id === shared.publicationId),
+    );
+
     const followers = await core.listFollowers(reg2.researcher.id);
     check('follower list includes the follower', followers.some((f) => f.id === reg.researcher.id));
     const following = await core.listFollowing(reg.researcher.id);

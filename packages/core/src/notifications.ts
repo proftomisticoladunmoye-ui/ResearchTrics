@@ -102,6 +102,11 @@ export function describeNotification(n: {
     const who = n.actorLabel ?? 'A researcher';
     return `${who} started following you.`;
   }
+  if (n.type === 'coauthor_added') {
+    const who = n.actorLabel ?? 'A co-author';
+    const what = n.publicationTitle ? `“${n.publicationTitle}”` : 'a publication';
+    return `${who} added you as a co-author of ${what}. It now counts on your profile — open it to confirm or remove yourself.`;
+  }
   if (n.type === 'opportunity_match') {
     const kind = (n.opportunityType ?? 'opportunity').replace(/_/g, ' ');
     const what = n.opportunityTitle ? `: “${n.opportunityTitle}”` : '';

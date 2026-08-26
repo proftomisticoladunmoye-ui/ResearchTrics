@@ -32,7 +32,15 @@ const schema = z.object({
   publisher: z.string().max(300).optional(),
   primaryFileId: z.string().uuid().optional(),
   coAuthors: z
-    .array(z.object({ name: z.string().min(1).max(200), orcid: z.string().max(40).optional() }))
+    .array(
+      z.object({
+        name: z.string().min(1).max(200),
+        orcid: z.string().max(40).optional(),
+        // Set when the uploader picked the co-author from the platform — links
+        // the work to that profile so it counts for them too.
+        researcherId: z.string().uuid().optional(),
+      }),
+    )
     .max(30)
     .optional(),
 });
@@ -54,7 +62,12 @@ export async function POST(req: NextRequest) {
       venue: parsed.data.venue ?? null,
       publisher: parsed.data.publisher ?? null,
       primaryFileId: parsed.data.primaryFileId ?? null,
-      coAuthors: parsed.data.coAuthors?.map((c) => ({ name: c.name, orcid: c.orcid ?? null })) ?? [],
+      coAuthors:
+        parsed.data.coAuthors?.map((c) => ({
+          name: c.name,
+          orcid: c.orcid ?? null,
+          researcherId: c.researcherId ?? null,
+        })) ?? [],
     });
     return ok(result);
   } catch (err) {

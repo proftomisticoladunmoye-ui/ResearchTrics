@@ -87,9 +87,12 @@ export interface ManualPublicationInput {
   primaryFileId?: string | null;
   /**
    * Other authors on the work, so the uploader isn't shown as sole author. Each
-   * is stored by name; a verified ORCID links them to their platform profile.
+   * is stored by name. A co-author is linked to their ResearchTrics profile —
+   * so the work counts on THEIR profile and metrics too — when the uploader
+   * either selects them from the platform (`researcherId`, an explicit
+   * assertion) or supplies a verified `orcid`. Linked co-authors are notified.
    */
-  coAuthors?: Array<{ name: string; orcid?: string | null }>;
+  coAuthors?: Array<{ name: string; orcid?: string | null; researcherId?: string | null }>;
 }
 
 /**
@@ -118,19 +121,37 @@ export async function createManualPublication(
     ? await upsertJournal({ name: input.venue, publisher: input.publisher ?? undefined }, client)
     : null;
 
-  // Resolve co-authors to platform profiles via verified ORCID (safe linking).
+  // Resolve co-authors to platform profiles so the work counts on their profile
+  // too. Two safe linking paths: an explicit `researcherId` the uploader picked
+  // from the platform, or a verified ORCID. We never fuzzy-match by name (that
+  // could silently attribute a work to the wrong person and inflate metrics).
   const coAuthors = (input.coAuthors ?? [])
-    .map((c) => ({ name: c.name?.trim() ?? '', orcid: c.orcid?.trim() || null }))
+    .map((c) => ({
+      name: c.name?.trim() ?? '',
+      orcid: c.orcid?.trim() || null,
+      researcherId: c.researcherId?.trim() || null,
+    }))
     .filter((c) => c.name.length > 0)
     .slice(0, 30);
   const coAuthorLinks = await Promise.all(
     coAuthors.map(async (c) => {
-      if (!c.orcid) return null;
-      const idRow = await client.researcherIdentifier.findUnique({
-        where: { scheme_value: { scheme: 'orcid', value: c.orcid } },
-        select: { researcherId: true, verified: true },
-      });
-      return idRow?.verified ? idRow.researcherId : null;
+      // Explicit selection from the platform is authoritative — but validate the
+      // profile exists (and isn't the uploader, who is already author 0).
+      if (c.researcherId && c.researcherId !== researcherId) {
+        const exists = await client.researcher.findFirst({
+          where: { id: c.researcherId, deletedAt: null },
+          select: { id: true },
+        });
+        if (exists) return exists.id;
+      }
+      if (c.orcid) {
+        const idRow = await client.researcherIdentifier.findUnique({
+          where: { scheme_value: { scheme: 'orcid', value: c.orcid } },
+          select: { researcherId: true, verified: true },
+        });
+        if (idRow?.verified && idRow.researcherId !== researcherId) return idRow.researcherId;
+      }
+      return null;
     }),
   );
 
@@ -159,6 +180,22 @@ export async function createManualPublication(
       },
     },
   });
+
+  // Tell each linked co-author the work now counts on their profile, so they can
+  // confirm it or remove themselves if they were tagged in error.
+  const linkedCoAuthorIds = Array.from(
+    new Set(coAuthorLinks.filter((id): id is string => !!id && id !== researcherId)),
+  );
+  for (const recipientId of linkedCoAuthorIds) {
+    await client.notification.create({
+      data: {
+        recipientId,
+        publicationId: pub.id,
+        type: 'coauthor_added',
+        actorLabel: authorName,
+      },
+    });
+  }
 
   return { status: 'created', publicationId: pub.id, slug };
 }

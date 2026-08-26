@@ -69,7 +69,12 @@ export class ResendEmailProvider implements EmailProvider {
         }),
       },
     );
-    if (!res.ok) throw new Error(`Resend send failed: ${res.status}`);
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      // Include the provider's own message so a misconfiguration (unverified
+      // sender domain, bad key, invalid from address) is diagnosable, not opaque.
+      throw new Error(`Resend send failed: ${res.status}${detail ? ` — ${detail.slice(0, 300)}` : ''}`);
+    }
   }
 }
 

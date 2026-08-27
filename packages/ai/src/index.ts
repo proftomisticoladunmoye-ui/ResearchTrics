@@ -26,6 +26,18 @@ export interface AIProviderConfig {
 const DEFAULT_OPENROUTER_MODEL = 'anthropic/claude-haiku-4.5';
 
 /**
+ * Normalize an operator-supplied model slug. Defends against the common env-var
+ * paste mistake of putting the whole `KEY=VALUE` line (or a quoted value) into
+ * the value field — e.g. `AI_MODEL=anthropic/claude-sonnet-4.6` — which would
+ * otherwise be sent verbatim to the provider and rejected as an invalid model.
+ */
+export function cleanModelSlug(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  const s = raw.trim().replace(/^AI_MODEL\s*=\s*/i, '').replace(/^["']|["']$/g, '').trim();
+  return s.length > 0 ? s : undefined;
+}
+
+/**
  * Resolve the configured AI provider (Spec §48). Defaults to the on-platform
  * `LocalProvider`. If an external provider (`claude` / `openrouter`) is requested
  * but no API key is configured, this falls back to the local provider rather than
@@ -38,10 +50,11 @@ export function createAIProvider(cfg: AIProviderConfig = {}): {
   fellBack: boolean;
 } {
   const requested = (cfg.provider ?? 'local').toLowerCase();
+  const model = cleanModelSlug(cfg.model);
 
   if (requested === 'claude') {
     if (!cfg.apiKey) return { provider: new LocalProvider(), fellBack: true };
-    return { provider: new ClaudeProvider({ apiKey: cfg.apiKey, model: cfg.model }), fellBack: false };
+    return { provider: new ClaudeProvider({ apiKey: cfg.apiKey, model }), fellBack: false };
   }
 
   // OpenAI-compatible gateway (OpenRouter and similar) — for cost-effective
@@ -51,7 +64,7 @@ export function createAIProvider(cfg: AIProviderConfig = {}): {
     return {
       provider: new OpenAICompatibleProvider({
         apiKey: cfg.apiKey,
-        model: cfg.model && cfg.model.includes('/') ? cfg.model : DEFAULT_OPENROUTER_MODEL,
+        model: model && model.includes('/') ? model : DEFAULT_OPENROUTER_MODEL,
         baseUrl: cfg.baseUrl,
         title: 'ResearchTrics',
         referer: 'https://www.researchtrics.com',

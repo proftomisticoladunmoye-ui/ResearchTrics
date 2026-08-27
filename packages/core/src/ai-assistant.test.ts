@@ -75,11 +75,15 @@ describe('offlineAssist (deterministic, no fabrication)', () => {
 describe('ASSISTANT_TASKS', () => {
   it('covers the full research-writing suite', () => {
     expect(ASSISTANT_TASKS).toEqual([
+      'journal_article',
+      'grant',
       'abstract',
       'title',
       'improve',
       'proofread',
+      'translate',
       'paraphrase',
+      'critique',
       'questions',
       'keywords',
       'summary',
@@ -88,5 +92,9 @@ describe('ASSISTANT_TASKS', () => {
       'reviewer_response',
       'refine',
     ]);
+  });
+
+  it('has no duplicate task keys', () => {
+    expect(new Set(ASSISTANT_TASKS).size).toBe(ASSISTANT_TASKS.length);
   });
 });

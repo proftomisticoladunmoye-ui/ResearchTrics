@@ -17,7 +17,14 @@ export const metadata: Metadata = {
 const ORCID_MESSAGES: Record<string, { variant: 'success' | 'error' | 'warning'; text: string }> = {
   connected: { variant: 'success', text: 'ORCID connected. Your profile is now ORCID-verified (Level 3).' },
   denied: { variant: 'warning', text: 'ORCID authorization was cancelled.' },
-  invalid_state: { variant: 'error', text: 'ORCID sign-in could not be verified. Please try again.' },
+  invalid_state: {
+    variant: 'error',
+    text: 'ORCID sign-in could not be verified (the security check failed). This usually means the site host changed mid-flow — make sure ORCID_REDIRECT_URI and NEXT_PUBLIC_APP_URL use the same host as the site (e.g. both www). Please try again.',
+  },
+  taken: {
+    variant: 'warning',
+    text: 'That ORCID iD is already connected to another ResearchTrics profile.',
+  },
   error: { variant: 'error', text: 'Something went wrong connecting ORCID. Please try again.' },
   unconfigured: { variant: 'warning', text: 'ORCID integration is not configured on this server yet.' },
 };
@@ -25,14 +32,14 @@ const ORCID_MESSAGES: Record<string, { variant: 'success' | 'error' | 'warning';
 export default async function DashboardProfilePage({
   searchParams,
 }: {
-  searchParams: Promise<{ orcid?: string }>;
+  searchParams: Promise<{ orcid?: string; reason?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
   const researcher = await getResearcherByUserId(user.id);
   if (!researcher) redirect('/dashboard');
 
-  const { orcid } = await searchParams;
+  const { orcid, reason } = await searchParams;
   const orcidMsg = orcid ? ORCID_MESSAGES[orcid] : undefined;
   const connectedOrcid =
     researcher.orcidConnection?.orcid ??
@@ -66,7 +73,12 @@ export default async function DashboardProfilePage({
 
       {orcidMsg ? (
         <div className="mt-4">
-          <Alert variant={orcidMsg.variant}>{orcidMsg.text}</Alert>
+          <Alert variant={orcidMsg.variant}>
+            {orcidMsg.text}
+            {orcid === 'error' && reason ? (
+              <span className="mt-1 block break-words font-mono text-xs opacity-80">ORCID said: {reason}</span>
+            ) : null}
+          </Alert>
         </div>
       ) : null}
 

@@ -8,8 +8,9 @@ export const dynamic = 'force-dynamic';
 const ORCID_STATE_COOKIE = 'rt_orcid_state';
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
-function back(status: string): NextResponse {
-  const res = NextResponse.redirect(`${appUrl}/dashboard/profile?orcid=${status}`);
+function back(status: string, reason?: string): NextResponse {
+  const q = reason ? `?orcid=${status}&reason=${encodeURIComponent(reason.slice(0, 300))}` : `?orcid=${status}`;
+  const res = NextResponse.redirect(`${appUrl}/dashboard/profile${q}`);
   res.cookies.set(ORCID_STATE_COOKIE, '', { path: '/', maxAge: 0 });
   return res;
 }
@@ -31,7 +32,10 @@ export async function GET(req: NextRequest) {
     await connectOrcid(user.researcher.id, code);
     return back('connected');
   } catch (err) {
-    logger.warn({ err }, 'ORCID connect failed');
-    return back('error');
+    const message = (err as Error).message ?? 'unknown error';
+    logger.warn({ err: message }, 'ORCID connect failed');
+    // An already-claimed iD is a clear, expected case — label it distinctly.
+    const status = /already connected/i.test(message) ? 'taken' : 'error';
+    return back(status, status === 'error' ? message : undefined);
   }
 }

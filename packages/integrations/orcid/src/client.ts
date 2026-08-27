@@ -56,7 +56,10 @@ export async function exchangeCode(
     body,
   });
   if (!res.ok) {
-    throw new Error(`ORCID token exchange failed (${res.status})`);
+    const detail = await res.text().catch(() => '');
+    // Include ORCID's own error (e.g. redirect_uri mismatch, invalid client) so a
+    // misconfiguration is diagnosable rather than an opaque failure.
+    throw new Error(`ORCID token exchange failed (${res.status})${detail ? ` — ${detail.slice(0, 300)}` : ''}`);
   }
   const json = tokenResponseSchema.parse(await res.json());
   return {

@@ -171,3 +171,42 @@ export function storageFromEnv(env: NodeJS.ProcessEnv = process.env): StoragePro
 // Register with storage.ts so getStorageProvider() selects S3/R2 from the
 // environment on first use, without storage.ts importing this SDK-bearing module.
 registerStorageEnvFactory(storageFromEnv);
+
+export interface StorageProbeResult {
+  /** `s3` when object storage is configured, else `local`. */
+  backend: 's3' | 'local';
+  /** True when all four OBJECT_STORAGE_* vars are present. */
+  configured: boolean;
+  /** True when a real write→read→delete round-trip succeeded. */
+  ok: boolean;
+  /** A short, non-secret reason when the round-trip failed. */
+  detail?: string;
+}
+
+/**
+ * Verify object storage actually works — the exact operation a file upload does.
+ * Writes, reads back, and deletes a tiny probe object. Surfaces a misconfigured
+ * bucket/credentials as an operational signal (no secrets), so an upload 500 can
+ * be diagnosed without server logs. Used by the health endpoint.
+ */
+export async function probeObjectStorage(env: NodeJS.ProcessEnv = process.env): Promise<StorageProbeResult> {
+  const config = s3ConfigFromEnv(env);
+  if (!config) {
+    // No object storage configured: uploads fall back to local disk, which is
+    // ephemeral in most hosts — flag it so it isn't mistaken for healthy.
+    return { backend: 'local', configured: false, ok: true, detail: 'using local filesystem (ephemeral)' };
+  }
+  const provider = new S3StorageProvider(config);
+  const key = `__healthcheck/probe-${Date.now()}`;
+  try {
+    await provider.put(key, new Uint8Array([0x6f, 0x6b]), 'application/octet-stream');
+    const back = await provider.read(key);
+    await provider.delete(key).catch(() => {});
+    if (!back || back.length !== 2) {
+      return { backend: 's3', configured: true, ok: false, detail: 'wrote object but could not read it back' };
+    }
+    return { backend: 's3', configured: true, ok: true };
+  } catch (err) {
+    return { backend: 's3', configured: true, ok: false, detail: (err as Error).message.slice(0, 200) };
+  }
+}

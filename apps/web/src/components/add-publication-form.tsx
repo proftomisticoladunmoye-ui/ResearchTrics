@@ -72,7 +72,9 @@ export function AddPublicationForm() {
         const upBody = (await up.json().catch(() => ({}))) as { data?: { id: string }; error?: { message?: string } };
         if (!up.ok || !upBody.data) {
           setStatus('error');
-          setMessage(upBody.error?.message ?? 'File upload failed.');
+          setMessage(
+            `Couldn't upload the attached file — ${upBody.error?.message ?? 'the file service is unavailable.'} You can still add the publication without a file.`,
+          );
           return;
         }
         primaryFileId = upBody.data.id;
@@ -107,7 +109,7 @@ export function AddPublicationForm() {
       const body = (await res.json().catch(() => ({}))) as { data?: { slug: string }; error?: { message?: string } };
       if (!res.ok || !body.data) {
         setStatus('error');
-        setMessage(body.error?.message ?? 'Could not add publication.');
+        setMessage(`Couldn't save the publication — ${body.error?.message ?? 'please try again.'}`);
         return;
       }
       form.reset();

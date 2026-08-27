@@ -258,6 +258,35 @@ async function main() {
       !(await core.listResearcherPublications(reg2.researcher.id, { take: 50 })).some((p) => p.id === shared.publicationId),
     );
 
+    // Exact upload path the form uses: store a PDF, then create a manual
+    // publication that references it AND links a platform co-author. This is the
+    // combination reported as failing in production.
+    const pdfBytes = new TextEncoder().encode(
+      '%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\nBT /F1 12 Tf (Joint study text) Tj ET\n%%EOF',
+    );
+    const storedDoc = await core.storeFile({
+      data: pdfBytes,
+      filename: 'Dr Leah Paper.pdf',
+      mimeType: 'application/pdf',
+      accessLevel: 'public',
+      uploaderId: reg.user.id,
+    });
+    check('research document (PDF with text) uploads and stores', !!storedDoc.id && storedDoc.pdfHasText === true);
+    const withDoc = await core.createManualPublication(reg.researcher.id, reg.researcher.displayName, {
+      title: 'Manual Upload With Attached Document',
+      outputType: 'journal_article',
+      primaryFileId: storedDoc.id,
+      coAuthors: [{ name: reg2.researcher.displayName, researcherId: reg2.researcher.id }],
+    });
+    check('manual publication with an attached file + linked co-author is created', withDoc.status === 'created');
+    check(
+      'the attached document links to the created publication',
+      (await prisma.publication.findUnique({ where: { id: withDoc.publicationId }, select: { primaryFileId: true } }))
+        ?.primaryFileId === storedDoc.id,
+    );
+    // Clean up so the co-author's later assertions are unaffected.
+    await core.removePublicationForResearcher(reg2.researcher.id, withDoc.publicationId);
+
     const followers = await core.listFollowers(reg2.researcher.id);
     check('follower list includes the follower', followers.some((f) => f.id === reg.researcher.id));
     const following = await core.listFollowing(reg.researcher.id);

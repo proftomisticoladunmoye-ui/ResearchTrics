@@ -39,13 +39,36 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ key
 
     const provider = getStorageProvider();
 
-    // Prefer a presigned redirect when the provider can issue one (R2/S3).
+    // Public full text (what Google Scholar indexes) is streamed INLINE from this
+    // app domain, not redirected off-site. Scholar's crawler is conservative
+    // about redirects and off-domain full text, and citation_pdf_url must resolve
+    // to the PDF on the same host as the landing page — a 307 to a time-limited,
+    // off-domain presigned URL is a known indexing risk. Bytes are cached at the
+    // edge, so the app doesn't re-proxy every crawl (Spec §11, §42).
+    if (file.accessLevel === 'public' && provider.read) {
+      const bytes = await provider.read(storageKey);
+      if (!bytes) throw notFound('File not found');
+      const safeName = file.filename.replace(/[^\w.-]/g, '_');
+      return new NextResponse(Buffer.from(bytes), {
+        status: 200,
+        headers: {
+          'Content-Type': file.mimeType,
+          'Content-Disposition': `inline; filename="${safeName}"`,
+          'Content-Length': String(bytes.length),
+          // Long, immutable cache: the key is a content hash, so bytes never change.
+          'Cache-Control': 'public, max-age=86400, s-maxage=604800, immutable',
+        },
+      });
+    }
+
+    // Private/restricted files: offload bandwidth via a short-lived presigned
+    // redirect where the provider can issue one (R2/S3); SEO doesn't apply here.
     if (provider.signedUrl) {
       const url = await provider.signedUrl(storageKey, 300);
       if (url) return NextResponse.redirect(url, 307);
     }
 
-    // Otherwise stream the bytes (local-fs).
+    // Fallback: stream the bytes (local-fs, or a provider without presigning).
     if (provider.read) {
       const bytes = await provider.read(storageKey);
       if (!bytes) throw notFound('File not found');

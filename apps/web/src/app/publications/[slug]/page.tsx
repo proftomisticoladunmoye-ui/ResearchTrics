@@ -19,6 +19,9 @@ import { ShareButton } from '@/components/share-button';
 import { FollowButton } from '@/components/follow-button';
 import { SaveButton } from '@/components/save-button';
 import { MintDoiButton } from '@/components/mint-doi-button';
+import { OrcidSyncButton } from '@/components/orcid-sync-button';
+import { isOrcidWorkSyncEnabled } from '@researchtrics/integration-orcid';
+import { prisma } from '@researchtrics/db';
 
 function humanizeType(t: string): string {
   return t.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
@@ -117,6 +120,14 @@ export default async function PublicationPage({
   const viewerIsAuthor =
     !!viewer?.researcher && p.authors.some((a) => a.researcher?.id === viewer.researcher!.id);
   const canMintDoi = viewerIsAuthor && !doi && isDataCiteMintConfigured();
+  // Authors can push their own works into their ORCID record when work sync is on.
+  const showOrcidSync = viewerIsAuthor && isOrcidWorkSyncEnabled();
+  const orcidSynced = showOrcidSync
+    ? (await prisma.orcidWorkSync.findUnique({
+        where: { researcherId_publicationId: { researcherId: viewer!.researcher!.id, publicationId: p.id } },
+        select: { id: true },
+      })) !== null
+    : false;
 
   const scholarlyJsonLd = {
     '@context': 'https://schema.org',
@@ -201,6 +212,7 @@ export default async function PublicationPage({
         ) : null}
         <ShareButton url={shareUrl} title={p.title} />
         {canMintDoi ? <MintDoiButton slug={p.slug} /> : null}
+        {showOrcidSync ? <OrcidSyncButton slug={p.slug} initialSynced={orcidSynced} /> : null}
       </div>
 
       {p.abstract ? (

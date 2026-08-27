@@ -448,6 +448,7 @@ model Researcher {
   following              Follow[]                     @relation("Following")
   followers              Follow[]                     @relation("Followers")
   publicationSaves       PublicationSave[]
+  orcidWorkSyncs         OrcidWorkSync[]
 
   @@index([familyName])
   @@index([profileStatus])
@@ -613,6 +614,24 @@ model OrcidConnection {
   @@map("orcid_connections")
 }
 
+/// Tracks works pushed into a researcher's ORCID record (Spec §13). The
+/// `putCode` is ORCID's id for the created work, kept so we never push the same
+/// work twice and can update/delete it later.
+model OrcidWorkSync {
+  id            String   @id @default(uuid())
+  researcherId  String   @map("researcher_id")
+  publicationId String   @map("publication_id")
+  putCode       String   @map("put_code")
+  syncedAt      DateTime @default(now()) @map("synced_at")
+
+  researcher  Researcher  @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@unique([researcherId, publicationId])
+  @@index([publicationId])
+  @@map("orcid_work_syncs")
+}
+
 /// Single-use tokens for email verification / password reset (Spec §38, §40).
 /// Only the hash of the token is stored.
 model VerificationToken {
@@ -693,6 +712,7 @@ model Publication {
   unifiedRecord    UnifiedWorkRecord?
   notifications    Notification[]
   savedBy          PublicationSave[]
+  orcidWorkSyncs   OrcidWorkSync[]
 
   @@index([publishedYear])
   @@index([journalId])

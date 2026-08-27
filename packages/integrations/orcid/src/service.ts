@@ -1,7 +1,7 @@
 import { prisma, type PrismaClient } from '@researchtrics/db';
-import { encryptSecret, setVerificationLevel, conflict, logger } from '@researchtrics/core';
+import { encryptSecret, decryptSecret, setVerificationLevel, badRequest, conflict, notFound, logger } from '@researchtrics/core';
 import { loadOrcidConfig } from './config';
-import { exchangeCode, fetchPublicProfile, type OrcidPublicProfile } from './client';
+import { exchangeCode, fetchPublicProfile, buildWorkPayload, pushWork, type OrcidPublicProfile } from './client';
 
 /**
  * ORCID connect flow (Spec §13). Verifies iD ownership via OAuth, stores
@@ -153,4 +153,73 @@ export async function disconnectOrcid(
     where: { researcherId, scheme: 'orcid' },
     data: { verified: false },
   });
+}
+
+export interface PushWorkResult {
+  status: 'pushed' | 'exists';
+  putCode: string;
+}
+
+/**
+ * Push one of a researcher's publications into their ORCID record (Spec §13).
+ * Requires ORCID work sync to be enabled AND the researcher's connection to carry
+ * the `/activities/update` scope (re-connecting grants it). Idempotent: a work
+ * already synced returns its put-code instead of pushing a duplicate. The token
+ * is decrypted only in memory here, never returned.
+ */
+export async function pushPublicationToOrcid(
+  researcherId: string,
+  publicationId: string,
+  opts: { fetchImpl?: typeof fetch } = {},
+  client: PrismaClient = prisma,
+): Promise<PushWorkResult> {
+  const config = loadOrcidConfig();
+  if (!config.workSyncEnabled) {
+    throw badRequest('ORCID work sync is not enabled on this server (set ORCID_ENABLE_WORK_SYNC=true).');
+  }
+
+  const connection = await client.orcidConnection.findUnique({ where: { researcherId } });
+  if (!connection) throw badRequest('Connect your ORCID iD first, then sync works.');
+  if (!connection.scope || !connection.scope.includes('/activities/update')) {
+    throw badRequest('Reconnect your ORCID iD to grant permission to add works (the update scope).');
+  }
+
+  // Idempotency: never push the same work twice.
+  const existing = await client.orcidWorkSync.findUnique({
+    where: { researcherId_publicationId: { researcherId, publicationId } },
+    select: { putCode: true },
+  });
+  if (existing) return { status: 'exists', putCode: existing.putCode };
+
+  const pub = await client.publication.findFirst({
+    where: { id: publicationId, deletedAt: null },
+    include: {
+      journal: { select: { name: true } },
+      identifiers: { where: { scheme: 'doi' }, select: { value: true }, take: 1 },
+      authors: { where: { researcherId }, select: { id: true }, take: 1 },
+    },
+  });
+  if (!pub) throw notFound('Publication not found.');
+  if (pub.authors.length === 0) throw badRequest('You can only add your own works to your ORCID record.');
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.researchtrics.com').replace(/\/$/, '');
+  const work = buildWorkPayload({
+    title: pub.title,
+    outputType: pub.outputType,
+    publishedYear: pub.publishedYear,
+    journalName: pub.journal?.name ?? null,
+    doi: pub.identifiers[0]?.value ?? null,
+    landingUrl: `${appUrl}/publications/${pub.slug}`,
+  });
+
+  const accessToken = decryptSecret(connection.accessTokenEnc);
+  const putCode = await pushWork(config, connection.orcid, accessToken, work, opts.fetchImpl);
+
+  await client.orcidWorkSync.create({ data: { researcherId, publicationId, putCode } });
+  await client.orcidConnection.update({
+    where: { researcherId },
+    data: { lastSyncedAt: new Date() },
+  });
+  logger.info({ researcherId, publicationId, putCode }, 'Work pushed to ORCID');
+  return { status: 'pushed', putCode };
 }

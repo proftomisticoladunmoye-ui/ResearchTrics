@@ -178,6 +178,70 @@ async function main() {
     delete process.env.DATACITE_PASSWORD;
     delete process.env.DATACITE_PREFIX;
 
+    // ORCID work push-back (§13): add a researcher's own work to their ORCID
+    // record via the member API, with put-code tracking for idempotency.
+    const orcid = await import('@researchtrics/integration-orcid');
+    process.env.ORCID_CLIENT_ID = 'APP-SMOKE';
+    process.env.ORCID_CLIENT_SECRET = 'smoke-secret';
+    process.env.ORCID_REDIRECT_URI = 'https://www.researchtrics.com/api/v1/integrations/orcid/callback';
+    process.env.ORCID_ENVIRONMENT = 'sandbox';
+    process.env.ORCID_ENABLE_WORK_SYNC = 'true';
+    check('ORCID work sync gates on the env flag', orcid.isOrcidWorkSyncEnabled() === true);
+    const orcidPub = await core.createManualPublication(reg.researcher.id, reg.researcher.displayName, {
+      title: 'A Work To Sync To ORCID',
+      outputType: 'journal_article',
+    });
+    await prisma.orcidConnection.create({
+      data: {
+        researcherId: reg.researcher.id,
+        orcid: '0000-0002-1825-0097',
+        accessTokenEnc: core.encryptSecret('fake-access-token'),
+        scope: '/authenticate /activities/update',
+      },
+    });
+    const fakeOrcid = (async () => ({
+      status: 201,
+      headers: new Headers({ location: 'https://api.sandbox.orcid.org/v3.0/0000-0002-1825-0097/work/987654' }),
+      text: async () => '',
+    })) as unknown as typeof fetch;
+    const pushed = await orcid.pushPublicationToOrcid(reg.researcher.id, orcidPub.publicationId, { fetchImpl: fakeOrcid });
+    check('work pushed to ORCID returns a put-code', pushed.status === 'pushed' && pushed.putCode === '987654');
+    check(
+      'the ORCID push is recorded for idempotency',
+      (await prisma.orcidWorkSync.findUnique({
+        where: { researcherId_publicationId: { researcherId: reg.researcher.id, publicationId: orcidPub.publicationId } },
+      })) !== null,
+    );
+    const pushedAgain = await orcid.pushPublicationToOrcid(reg.researcher.id, orcidPub.publicationId, { fetchImpl: fakeOrcid });
+    check('re-pushing the same work is a no-op (returns existing put-code)', pushedAgain.status === 'exists');
+    const stranger = await core.registerResearcher({
+      email: 'stranger@example.org',
+      password: 'strangerpass9!',
+      displayName: 'Stranger Researcher',
+    });
+    await prisma.orcidConnection.create({
+      data: {
+        researcherId: stranger.researcher.id,
+        orcid: '0000-0002-1825-0098',
+        accessTokenEnc: core.encryptSecret('another-token'),
+        scope: '/authenticate /activities/update',
+      },
+    });
+    let notMyWork = false;
+    await orcid
+      .pushPublicationToOrcid(stranger.researcher.id, orcidPub.publicationId, { fetchImpl: fakeOrcid })
+      .catch(() => {
+        notMyWork = true;
+      });
+    check('a researcher cannot push a work they did not author', notMyWork);
+    await prisma.orcidConnection.deleteMany({ where: { researcherId: stranger.researcher.id } });
+    await prisma.orcidWorkSync.deleteMany({ where: { researcherId: reg.researcher.id } });
+    await prisma.orcidConnection.deleteMany({ where: { researcherId: reg.researcher.id } });
+    delete process.env.ORCID_CLIENT_ID;
+    delete process.env.ORCID_CLIENT_SECRET;
+    delete process.env.ORCID_REDIRECT_URI;
+    delete process.env.ORCID_ENABLE_WORK_SYNC;
+
     // A DOI-less work discovered via multiple co-authors must dedup on its
     // OpenAlex id — not create a duplicate (which would violate the identifier
     // unique constraint, as seen in production worker logs).

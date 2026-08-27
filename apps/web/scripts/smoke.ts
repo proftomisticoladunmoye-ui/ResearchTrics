@@ -139,6 +139,45 @@ async function main() {
     });
     check('refreshed publication reflects the new citation count', refreshedCount?.count === 99, `count=${refreshedCount?.count}`);
 
+    // DOI minting (§37): register a DataCite DOI for a work that has none.
+    process.env.DATACITE_ENDPOINT = 'https://api.test.datacite.org';
+    process.env.DATACITE_REPOSITORY_ID = 'SMOKE.TEST';
+    process.env.DATACITE_PASSWORD = 'smoke-secret';
+    process.env.DATACITE_PREFIX = '10.99999';
+    const doiPub = await core.createManualPublication(reg.researcher.id, reg.researcher.displayName, {
+      title: 'A Book Without a DOI',
+      outputType: 'book',
+    });
+    let mintedBody: unknown = null;
+    const fakeDataCite = (async (_url: string, init?: { body?: string }) => {
+      mintedBody = JSON.parse(String(init?.body ?? '{}'));
+      return {
+        ok: true,
+        status: 201,
+        json: async () => ({ data: { id: '10.99999/smoke-abc', attributes: { state: 'findable' } } }),
+        text: async () => '',
+      };
+    }) as unknown as typeof fetch;
+    const minted = await core.mintPublicationDoi(doiPub.publicationId, { fetchImpl: fakeDataCite, publish: true });
+    check('DOI minted and returned', minted.status === 'minted' && minted.doi === '10.99999/smoke-abc');
+    check(
+      'mint payload carries DataCite creators + findable event',
+      !!(mintedBody as { data?: { attributes?: { event?: string; creators?: unknown[] } } })?.data?.attributes?.event &&
+        Array.isArray((mintedBody as { data?: { attributes?: { creators?: unknown[] } } }).data?.attributes?.creators),
+    );
+    check(
+      'minted DOI is stored as a publication identifier',
+      (await prisma.publicationIdentifier.findFirst({
+        where: { publicationId: doiPub.publicationId, scheme: 'doi', value: '10.99999/smoke-abc' },
+      })) !== null,
+    );
+    const second = await core.mintPublicationDoi(doiPub.publicationId, { fetchImpl: fakeDataCite });
+    check('re-minting returns the existing DOI (idempotent)', second.status === 'exists' && second.doi === '10.99999/smoke-abc');
+    delete process.env.DATACITE_ENDPOINT;
+    delete process.env.DATACITE_REPOSITORY_ID;
+    delete process.env.DATACITE_PASSWORD;
+    delete process.env.DATACITE_PREFIX;
+
     // A DOI-less work discovered via multiple co-authors must dedup on its
     // OpenAlex id — not create a duplicate (which would violate the identifier
     // unique constraint, as seen in production worker logs).

@@ -6,6 +6,7 @@ import {
   getEntityMetrics,
   getFollowState,
   isPublicationSaved,
+  isDataCiteMintConfigured,
   CITATION_FORMATS,
   type CitationFormat,
 } from '@researchtrics/core';
@@ -17,6 +18,7 @@ import { RecommendButton } from '@/components/recommend-button';
 import { ShareButton } from '@/components/share-button';
 import { FollowButton } from '@/components/follow-button';
 import { SaveButton } from '@/components/save-button';
+import { MintDoiButton } from '@/components/mint-doi-button';
 
 function humanizeType(t: string): string {
   return t.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
@@ -111,6 +113,10 @@ export default async function PublicationPage({
     ? await getFollowState(primaryAuthor!.id, viewer!.researcher!.id)
     : null;
   const saved = viewer?.researcher ? await isPublicationSaved(viewer.researcher.id, p.id) : false;
+  // Authors can mint a DOI for a work that has none, when DataCite is configured.
+  const viewerIsAuthor =
+    !!viewer?.researcher && p.authors.some((a) => a.researcher?.id === viewer.researcher!.id);
+  const canMintDoi = viewerIsAuthor && !doi && isDataCiteMintConfigured();
 
   const scholarlyJsonLd = {
     '@context': 'https://schema.org',
@@ -194,6 +200,7 @@ export default async function PublicationPage({
           />
         ) : null}
         <ShareButton url={shareUrl} title={p.title} />
+        {canMintDoi ? <MintDoiButton slug={p.slug} /> : null}
       </div>
 
       {p.abstract ? (

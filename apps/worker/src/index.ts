@@ -11,6 +11,7 @@ import {
   notifyOpportunityMatches,
   createOpportunityProvider,
   precomputeProfileSummaries,
+  refreshCitationCounts,
   sendEngagementDigests,
   emailProviderFromEnv,
   setEmailProvider,
@@ -223,6 +224,27 @@ aiSummariesWorker.on('failed', (job, err) =>
   logger.error({ jobId: job?.id, err }, 'AI profile summaries job failed'),
 );
 
+// Citation-count refresh (§33). Re-pulls current cited_by_count from OpenAlex
+// for known works whose stored count is missing/stale, so on-platform citation
+// totals track the live scholarly graph instead of freezing at import time.
+const citationQueue = new Queue(QUEUES.citationUpdate, { connection, defaultJobOptions });
+const citationWorker = new Worker(
+  QUEUES.citationUpdate,
+  async (job: Job) => {
+    const result = await refreshCitationCounts({
+      limit: Number(process.env.CITATION_REFRESH_BATCH ?? 200),
+      staleAfterDays: Number(process.env.CITATION_REFRESH_STALE_DAYS ?? 7),
+      mailto: process.env.OPENALEX_MAILTO,
+    });
+    logger.info({ jobId: job.id, ...result }, 'Citation counts refreshed');
+    return result;
+  },
+  { connection, concurrency: 1 },
+);
+citationWorker.on('failed', (job, err) =>
+  logger.error({ jobId: job?.id, err }, 'Citation refresh job failed'),
+);
+
 async function bootstrap(): Promise<void> {
   logger.info({ redisUrl: redisUrl.replace(/:[^:@/]*@/, ':****@') }, 'Starting ResearchTrics worker');
   // Enqueue a self-check so the pipeline is exercised on boot.
@@ -295,6 +317,16 @@ async function bootstrap(): Promise<void> {
       .catch((err) => logger.warn({ err }, 'Could not schedule AI summaries'));
     logger.info('AI profile summaries scheduled (immediate + daily)');
   }
+
+  // Citation-count refresh: run once now, then daily. Enabled by default since it
+  // only calls the free OpenAlex API; set CITATION_REFRESH_ENABLED=false to skip.
+  if (process.env.CITATION_REFRESH_ENABLED !== 'false') {
+    await citationQueue.add('refresh', {}).catch(() => {});
+    await citationQueue
+      .add('refresh', {}, { repeat: { every: 24 * 60 * 60 * 1000 }, jobId: 'citation-refresh-daily' })
+      .catch((err) => logger.warn({ err }, 'Could not schedule citation refresh'));
+    logger.info('Citation-count refresh scheduled (immediate + daily)');
+  }
 }
 
 async function shutdown(signal: string): Promise<void> {
@@ -308,6 +340,7 @@ async function shutdown(signal: string): Promise<void> {
   await emailDigestWorker.close();
   await opportunityMatchWorker.close();
   await aiSummariesWorker.close();
+  await citationWorker.close();
   await healthQueue.close();
   await opportunityQueue.close();
   await ingestQueue.close();
@@ -315,6 +348,7 @@ async function shutdown(signal: string): Promise<void> {
   await emailDigestQueue.close();
   await opportunityMatchQueue.close();
   await aiSummariesQueue.close();
+  await citationQueue.close();
   await connection.quit();
   process.exit(0);
 }

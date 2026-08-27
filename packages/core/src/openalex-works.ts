@@ -141,6 +141,37 @@ export async function fetchOpenAlexWorksForAuthor(
   return json.results ?? [];
 }
 
+/**
+ * Fetch current citation counts for known works by their OpenAlex ids, batched
+ * (OpenAlex accepts up to 50 ids per request via the `|` OR filter). Returns a
+ * map of `openalex id → cited_by_count`. Used by the periodic citation refresh
+ * so on-platform counts track the live scholarly graph.
+ */
+export async function fetchOpenAlexCitationCounts(
+  openalexIds: string[],
+  opts: OpenAlexWorksOptions = {},
+): Promise<Map<string, number>> {
+  const base = (opts.baseUrl ?? 'https://api.openalex.org').replace(/\/$/, '');
+  const out = new Map<string, number>();
+  for (let i = 0; i < openalexIds.length; i += 50) {
+    const batch = openalexIds.slice(i, i + 50);
+    const params = new URLSearchParams({
+      filter: `openalex_id:${batch.join('|')}`,
+      'per-page': '50',
+      select: 'id,cited_by_count',
+    });
+    if (opts.mailto) params.set('mailto', opts.mailto);
+    const res = await (opts.fetchImpl ?? fetch)(`${base}/works?${params.toString()}`);
+    if (!res.ok) throw new Error(`OpenAlex citation refresh failed: ${res.status}`);
+    const json = (await res.json()) as { results?: Array<{ id?: string; cited_by_count?: number }> };
+    for (const w of json.results ?? []) {
+      const id = stripPrefix(w?.id, /^https?:\/\/openalex\.org\//i);
+      if (id && typeof w.cited_by_count === 'number') out.set(id, w.cited_by_count);
+    }
+  }
+  return out;
+}
+
 export interface ResearcherWorksResult {
   fetched: number;
   created: number;

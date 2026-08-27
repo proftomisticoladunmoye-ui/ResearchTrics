@@ -118,6 +118,27 @@ async function main() {
     const again = await core.createPublicationFromNormalized(normalized);
     check('dedup on DOI returns existing (no duplicate)', again.status === 'exists' && again.publicationId === created.publicationId);
 
+    // Citation-count refresh keeps on-platform totals live (§33): re-pull the
+    // current count from OpenAlex for a work whose stored count is stale.
+    const citePub = await core.createPublicationFromNormalized({
+      title: 'Cited Work For Refresh',
+      openAlexId: 'W_cite_refresh',
+      authors: [{ rawName: 'Cite Author' }],
+      citationCounts: [{ source: 'openalex' as const, count: 5 }],
+    });
+    const fakeOpenAlex = (async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ results: [{ id: 'https://openalex.org/W_cite_refresh', cited_by_count: 99 }] }),
+    })) as unknown as typeof fetch;
+    const refreshed = await core.refreshCitationCounts({ staleAfterDays: -1, fetchImpl: fakeOpenAlex });
+    check('citation refresh updates a stale count from OpenAlex', refreshed.updated >= 1, JSON.stringify(refreshed));
+    const refreshedCount = await prisma.publicationCitationCount.findUnique({
+      where: { publicationId_source: { publicationId: citePub.publicationId, source: 'openalex' } },
+      select: { count: true },
+    });
+    check('refreshed publication reflects the new citation count', refreshedCount?.count === 99, `count=${refreshedCount?.count}`);
+
     // A DOI-less work discovered via multiple co-authors must dedup on its
     // OpenAlex id — not create a duplicate (which would violate the identifier
     // unique constraint, as seen in production worker logs).

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "horizon",
+      "runtimeExecutable": "C:/Users/Dell/AppData/Local/Temp/claude/C--Users-Dell-Downloads-ResearchTrics/aedc6dfa-940a-48a6-9c6d-58b1ab6514db/scratchpad/php/php.exe",
+      "runtimeArgs": ["C:/Users/Dell/Downloads/Horizon Academic Press/artisan", "serve", "--host=127.0.0.1", "--port=8000"],
+      "port": 8000,
+      "url": "http://localhost:8000"
+    }
+  ]
+}

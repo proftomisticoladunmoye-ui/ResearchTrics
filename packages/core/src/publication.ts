@@ -241,7 +241,7 @@ export async function linkResearcherToPublication(
 export async function findPublicationByDoi(
   doi: string,
   client: PrismaClient = prisma,
-): Promise<{ id: string; slug: string } | null> {
+): Promise<{ id: string; slug: string; deletedAt: Date | null } | null> {
   return findPublicationByIdentifier('doi', doi.toLowerCase(), client);
 }
 
@@ -250,17 +250,32 @@ export async function findPublicationByDoi(
  * The (scheme, value) pair is globally unique, so this is the dedup key used to
  * avoid creating a second row for a work already in the graph — essential for
  * federation, where the same work is discovered via several co-authors.
+ *
+ * Returns soft-deleted matches too (with `deletedAt` set) — the DOI is globally
+ * unique, so a re-import can't create a fresh row; callers restore instead.
  */
 export async function findPublicationByIdentifier(
   scheme: PublicationIdScheme,
   value: string,
   client: PrismaClient = prisma,
-): Promise<{ id: string; slug: string } | null> {
+): Promise<{ id: string; slug: string; deletedAt: Date | null } | null> {
   const idRow = await client.publicationIdentifier.findUnique({
     where: { scheme_value: { scheme, value } },
-    include: { publication: { select: { id: true, slug: true } } },
+    include: { publication: { select: { id: true, slug: true, deletedAt: true } } },
   });
   return idRow?.publication ?? null;
+}
+
+/**
+ * Un-delete a previously soft-deleted publication so a re-import brings it back
+ * (its DOI is globally unique, so we restore rather than create a duplicate).
+ * No-op when it isn't deleted.
+ */
+export async function restorePublication(id: string, client: PrismaClient = prisma): Promise<void> {
+  await client.publication.update({
+    where: { id },
+    data: { deletedAt: null },
+  });
 }
 
 /**
@@ -280,11 +295,19 @@ export async function createPublicationFromNormalized(
   // (the identifier pair is globally unique, so creating a second row would throw).
   if (doi) {
     const existing = await findPublicationByDoi(doi, client);
-    if (existing) return { status: 'exists', publicationId: existing.id, slug: existing.slug };
+    if (existing) {
+      // A previously-removed work being re-imported: bring it back rather than
+      // returning a dead slug (which would 404) or hitting the unique DOI.
+      if (existing.deletedAt) await restorePublication(existing.id, client);
+      return { status: 'exists', publicationId: existing.id, slug: existing.slug };
+    }
   }
   if (input.openAlexId) {
     const existing = await findPublicationByIdentifier('openalex', input.openAlexId, client);
-    if (existing) return { status: 'exists', publicationId: existing.id, slug: existing.slug };
+    if (existing) {
+      if (existing.deletedAt) await restorePublication(existing.id, client);
+      return { status: 'exists', publicationId: existing.id, slug: existing.slug };
+    }
   }
 
   const serial = await nextPublicationSerial(client);

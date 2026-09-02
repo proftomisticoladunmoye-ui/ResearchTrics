@@ -3,6 +3,7 @@ import {
   findPublicationByDoi,
   createPublicationFromNormalized,
   linkResearcherToPublication,
+  restorePublication,
   logger,
   type CreatePublicationInput,
 } from '@researchtrics/core';
@@ -23,6 +24,9 @@ export async function importPublicationByDoi(
 
   const existing = await findPublicationByDoi(doi);
   if (existing) {
+    // A previously-removed work being re-imported: restore it so the page loads
+    // instead of 404-ing on a soft-deleted slug.
+    if (existing.deletedAt) await restorePublication(existing.id);
     // Already in the graph — still associate the importing researcher with it.
     if (linkResearcher) await linkResearcherToPublication(existing.id, linkResearcher);
     return { status: 'exists', slug: existing.slug };

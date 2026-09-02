@@ -118,6 +118,14 @@ async function main() {
     const again = await core.createPublicationFromNormalized(normalized);
     check('dedup on DOI returns existing (no duplicate)', again.status === 'exists' && again.publicationId === created.publicationId);
 
+    // Re-importing a soft-deleted DOI must RESTORE it, not return a dead slug
+    // (which 404s) — the DOI is globally unique so a fresh row can't be made.
+    await prisma.publication.update({ where: { id: created.publicationId }, data: { deletedAt: new Date() } });
+    check('publication is soft-deleted (not visible by slug)', (await core.getPublicationBySlug(created.slug)) === null);
+    const reimport = await core.createPublicationFromNormalized(normalized);
+    check('re-import of a removed DOI restores it (same id)', reimport.status === 'exists' && reimport.publicationId === created.publicationId);
+    check('restored publication is visible by slug again (no 404)', (await core.getPublicationBySlug(created.slug)) !== null);
+
     // Citation-count refresh keeps on-platform totals live (§33): re-pull the
     // current count from OpenAlex for a work whose stored count is stale.
     const citePub = await core.createPublicationFromNormalized({

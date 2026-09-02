@@ -41,3 +41,4 @@ docker/postgres-data/
 # Embedded Postgres (local smoke runs)
 packages/db/.pgdata-smoke/
 **/.embedded-postgres/
+.claude/launch.json

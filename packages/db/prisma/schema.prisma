@@ -339,6 +339,7 @@ model User {
   auditLogs          AuditLog[]
   verificationTokens VerificationToken[]
   blogPosts          BlogPost[]
+  researchBulletins  ResearchBulletin[] @relation("BulletinAuthor")
 
   @@index([status])
   @@map("users")
@@ -630,6 +631,81 @@ model OrcidWorkSync {
   @@unique([researcherId, publicationId])
   @@index([publicationId])
   @@map("orcid_work_syncs")
+}
+
+/// ResearchTrics Research Bulletin — a scholarly knowledge-publishing series
+/// (NOT the ordinary blog). Each bulletin is a distinct, publicly-readable,
+/// citable publication with a permanent number/URL and full scholarly metadata.
+/// Authors and references are held as structured JSON in Phase 1; the internal
+/// citation graph and normalized author tables arrive in later phases. DOI/ISSN
+/// fields are present-but-empty so registration can be added without a rebuild.
+enum BulletinStatus {
+  draft
+  in_review
+  scheduled
+  published
+  archived
+}
+
+enum BulletinType {
+  research
+  methodological
+  psychometric
+  statistical
+  ai_research
+  research_technology
+  conceptual
+  evidence
+  research_practice
+  policy_research
+  replication
+  commentary
+  data_analysis
+}
+
+model ResearchBulletin {
+  id              String         @id @default(uuid())
+  /// Permanent series number, assigned at first publish (drafts have none).
+  number          Int?           @unique
+  slug            String         @unique
+  title           String
+  subtitle        String?
+  type            BulletinType   @default(research)
+  category        String
+  status          BulletinStatus @default(draft)
+  abstract        String
+  keywords        String[]
+  /// Sanitized semantic HTML (allow-listed on save).
+  bodyHtml        String         @map("body_html")
+  /// [{ name, affiliation?, orcid?, order }] — ordered author list.
+  authors         Json           @default("[]")
+  /// [{ raw, doi?, url?, type? }] — the reference list.
+  references      Json           @default("[]")
+  featuredImage   String?        @map("featured_image")
+  /// all_rights_reserved | cc_by | cc_by_nc | cc_by_nc_sa
+  license         String         @default("all_rights_reserved")
+  version         Int            @default(1)
+  publicationDate DateTime?      @map("publication_date")
+  scheduledFor    DateTime?      @map("scheduled_for")
+
+  // DOI-ready (never displayed unless actually registered)
+  doi             String?
+  doiStatus       String?        @map("doi_status")
+  doiRegisteredAt DateTime?      @map("doi_registered_at")
+
+  viewCount       Int            @default(0) @map("view_count")
+  downloadCount   Int            @default(0) @map("download_count")
+
+  authorUserId    String?        @map("author_user_id")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  authorUser User? @relation("BulletinAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, publicationDate])
+  @@index([type])
+  @@index([category])
+  @@map("research_bulletins")
 }
 
 /// Single-use tokens for email verification / password reset (Spec §38, §40).

@@ -75,5 +75,16 @@ async function buildEntries(type: SitemapType): Promise<SitemapEntry[]> {
         })),
       ];
     }
+    case 'research-bulletin': {
+      const { listPublishedBulletinSlugs } = await import('@researchtrics/core');
+      const bulletins = await listPublishedBulletinSlugs();
+      return [
+        { loc: `${appUrl}/research-bulletin` },
+        ...bulletins.map((b) => ({
+          loc: `${appUrl}/research-bulletin/${b.slug}`,
+          lastmod: b.updatedAt.toISOString(),
+        })),
+      ];
+    }
   }
 }

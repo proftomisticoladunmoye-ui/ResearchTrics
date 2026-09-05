@@ -1,6 +1,6 @@
 /** XML sitemap helpers (Spec §42, §71). Only public content is ever included. */
 
-export const SITEMAP_TYPES = ['researchers', 'publications', 'institutions', 'journals', 'blog'] as const;
+export const SITEMAP_TYPES = ['researchers', 'publications', 'institutions', 'journals', 'blog', 'research-bulletin'] as const;
 export type SitemapType = (typeof SITEMAP_TYPES)[number];
 
 export const SITEMAP_MAX_URLS = 5000; // shard beyond this in a later ops pass

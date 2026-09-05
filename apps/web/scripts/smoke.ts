@@ -1299,6 +1299,42 @@ async function main() {
     const rl = await core.checkRateLimit('resend-verification', `user:${newbie.user.id}`);
     check('resend-verification rate limit is wired', rl.allowed === true);
 
+    console.log('\nResearch Bulletin (scholarly publishing series §RB)');
+    const draft = await core.createBulletin(
+      {
+        title: 'Measurement Invariance in Cross-Cultural Assessment',
+        subtitle: 'A concise methodological primer',
+        type: 'psychometric',
+        category: 'Psychometrics',
+        abstract:
+          'This bulletin explains measurement invariance testing (configural, metric, scalar) and why it is a prerequisite for valid cross-group comparison of latent constructs in psychometric research and practice.',
+        keywords: ['measurement invariance', 'CFA', 'DIF'],
+        bodyHtml:
+          '<h2>Introduction</h2><p>Measurement invariance is necessary when comparing latent constructs across groups, because it establishes that a scale measures the same construct in the same way across those groups.</p><script>alert(1)</script><p>Testing proceeds in nested steps: configural invariance (same pattern), metric invariance (equal loadings), and scalar invariance (equal intercepts). Only when scalar invariance holds can observed group means be compared meaningfully without confounding by measurement artefacts.</p>',
+        authors: [{ name: 'Oladunmoye, E. O.', affiliation: 'ResearchTrics', order: 0 }],
+        references: [{ raw: 'Author, A. (2025). Measurement invariance. Journal of Testing, 1(1), 1–10.', doi: '10.1234/mi' }],
+        license: 'cc_by',
+      },
+      reg.user.id,
+    );
+    check('bulletin body HTML is sanitized on save (no <script>)', !(await core.getBulletinById(draft.id))!.bodyHtml.includes('<script'));
+    const notReady = core.bulletinReadiness({ title: 'x', abstract: '', category: '', keywords: [], bodyHtml: '', authors: [], references: [] });
+    check('readiness fails for an empty draft', notReady.ready === false);
+    const published = await core.publishBulletin(draft.id);
+    check('publishing assigns a permanent series number', typeof published.number === 'number' && published.number >= 1);
+    const pub = await core.getPublishedBulletinBySlug(published.slug);
+    check('published bulletin is publicly retrievable by slug', pub?.status === 'published' && pub?.number === published.number);
+    check('draft/unpublished bulletins are NOT publicly retrievable', (await core.getPublishedBulletinBySlug('no-such-bulletin-slug')) === null);
+    const cite = core.suggestedCitation(pub!, 'https://www.researchtrics.com');
+    check('suggested citation names the series + number', /ResearchTrics Research Bulletin/.test(cite) && cite.includes(String(published.number)));
+    check('bulletin BibTeX export renders', core.bulletinCitation(pub!, 'https://www.researchtrics.com', 'bibtex').startsWith('@'));
+    // Re-publishing keeps the same permanent number.
+    await core.setBulletinStatus(draft.id, 'draft');
+    const republished = await core.publishBulletin(draft.id);
+    check('re-publishing preserves the original number', republished.number === published.number);
+    const slugs = await core.listPublishedBulletinSlugs();
+    check('published bulletin appears in the sitemap source', slugs.some((s) => s.slug === published.slug));
+
     console.log('\nImpact report (§premium)');
     const reportDeep = await core.buildImpactReport(reg.researcher.id, { deep: true });
     check(

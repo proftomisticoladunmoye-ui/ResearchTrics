@@ -39,6 +39,8 @@ export * from './discovery';
 export * from './openalex-works';
 export * from './citation-refresh';
 export * from './doi-minting';
+export * from './bulletin';
+export * from './html-sanitize';
 export * from './claiming';
 export * from './invitations';
 export * from './review';

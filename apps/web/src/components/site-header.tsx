@@ -13,6 +13,7 @@ import { MenuAutoClose } from './menu-auto-close';
 // leads to the general publications feed.
 const NAV = [
   { href: '/discover', label: 'Discover' },
+  { href: '/research-bulletin', label: 'Research Bulletin' },
   { href: '/opportunities', label: 'Opportunities' },
   { href: '/dashboard/assistant', label: 'AI Assistant' },
 ];

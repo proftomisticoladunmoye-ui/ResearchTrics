@@ -41,6 +41,8 @@ export * from './citation-refresh';
 export * from './doi-minting';
 export * from './bulletin';
 export * from './html-sanitize';
+export * from './docx-import';
+export * from './bulletin-pdf';
 export * from './claiming';
 export * from './invitations';
 export * from './review';

@@ -62,8 +62,36 @@ export function BulletinEditor({ initial }: { initial?: BulletinInitial }) {
   const [status, setStatus] = useState<string>(initial?.status ?? 'draft');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'error' | 'success'; text: string } | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [report, setReport] = useState<Record<string, unknown> | null>(null);
 
   const set = (patch: Partial<BulletinInitial>) => setF((prev) => ({ ...prev, ...patch }));
+
+  async function importDocx(file: File) {
+    setImporting(true);
+    setMsg(null);
+    setReport(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/v1/admin/research-bulletin/import', { method: 'POST', body: fd });
+      const body = (await res.json().catch(() => ({}))) as {
+        data?: { title: string; bodyHtml: string; report: Record<string, unknown> };
+        error?: { message?: string };
+      };
+      if (!res.ok || !body.data) {
+        setMsg({ kind: 'error', text: body.error?.message ?? 'Import failed.' });
+        return;
+      }
+      set({ ...(body.data.title ? { title: body.data.title } : {}), bodyHtml: body.data.bodyHtml });
+      setReport(body.data.report);
+      setMsg({ kind: 'success', text: 'Word document imported. Review the report and edit before publishing.' });
+    } catch {
+      setMsg({ kind: 'error', text: 'Network error during import.' });
+    } finally {
+      setImporting(false);
+    }
+  }
 
   function payload() {
     return {
@@ -131,6 +159,41 @@ export function BulletinEditor({ initial }: { initial?: BulletinInitial }) {
   return (
     <div className="space-y-4">
       {msg ? <Alert variant={msg.kind === 'error' ? 'error' : 'success'}>{msg.text}</Alert> : null}
+
+      <Card className="space-y-2 border-rt-blue/30 bg-rt-blue-light/10 p-5">
+        <span className="text-sm font-semibold text-rt-text">Import from Microsoft Word (.docx)</span>
+        <p className="text-xs text-rt-muted">
+          Prepared the bulletin in Word? Upload it — headings, paragraphs, tables, images, links and YouTube
+          embeds become editable content. Review the import report, then edit before publishing.
+        </p>
+        <input
+          type="file"
+          accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          disabled={importing}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void importDocx(file);
+          }}
+          className={input}
+        />
+        {importing ? <p className="text-xs text-rt-muted">Importing…</p> : null}
+        {report ? (
+          <div className="mt-1 rounded border border-rt-border bg-rt-white p-3 text-xs text-rt-text">
+            <p className="font-semibold">Import report</p>
+            <ul className="mt-1 space-y-0.5">
+              <li>{report.titleDetected ? '✓' : '⚠'} Title {report.titleDetected ? 'detected' : 'not detected — set it manually'}</li>
+              <li>✓ {String(report.headings)} headings · {String(report.paragraphs)} paragraphs</li>
+              <li>✓ {String(report.tables)} tables · {String(report.images)} images ({String(report.imagesUploaded)} uploaded, {String(report.imagesInlined)} inlined)</li>
+              <li>✓ {String(report.links)} links · {String(report.youtube)} YouTube embeds · {String(report.references)} references detected</li>
+            </ul>
+            {Array.isArray(report.warnings) && report.warnings.length > 0 ? (
+              <ul className="mt-2 space-y-0.5 text-rt-error">
+                {(report.warnings as string[]).map((w, i) => <li key={i}>⚠ {w}</li>)}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </Card>
 
       <Card className="space-y-3 p-5">
         <label className="block">

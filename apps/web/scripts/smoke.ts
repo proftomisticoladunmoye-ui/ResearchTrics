@@ -1334,6 +1334,11 @@ async function main() {
     check('re-publishing preserves the original number', republished.number === published.number);
     const slugs = await core.listPublishedBulletinSlugs();
     check('published bulletin appears in the sitemap source', slugs.some((s) => s.slug === published.slug));
+    // Phase 2: PDF generation from the canonical content.
+    const pdf = await core.renderBulletinPdf(pub!, 'https://www.researchtrics.com');
+    check('bulletin PDF renders as a valid PDF buffer', Buffer.isBuffer(pdf) && pdf.length > 500 && pdf.subarray(0, 5).toString() === '%PDF-');
+    await core.incrementBulletinDownload(pub!.id);
+    check('bulletin download counter increments', (await core.getBulletinById(pub!.id))!.downloadCount === 1);
 
     console.log('\nImpact report (§premium)');
     const reportDeep = await core.buildImpactReport(reg.researcher.id, { deep: true });

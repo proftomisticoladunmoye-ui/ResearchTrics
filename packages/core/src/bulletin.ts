@@ -327,6 +327,11 @@ export async function incrementBulletinView(id: string, client: PrismaClient = p
   await client.researchBulletin.update({ where: { id }, data: { viewCount: { increment: 1 } } }).catch(() => {});
 }
 
+/** Best-effort download increment (fire-and-forget from the PDF route). */
+export async function incrementBulletinDownload(id: string, client: PrismaClient = prisma): Promise<void> {
+  await client.researchBulletin.update({ where: { id }, data: { downloadCount: { increment: 1 } } }).catch(() => {});
+}
+
 // --- Citation ---------------------------------------------------------------
 
 function splitName(name: string): { given?: string; family?: string; literal?: string } {

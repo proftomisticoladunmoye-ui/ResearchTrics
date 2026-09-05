@@ -42,6 +42,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (b.publicationDate) citation.citation_publication_date = b.publicationDate.toISOString().slice(0, 10);
   if (b.keywords.length) citation.citation_keywords = b.keywords.join('; ');
   if (b.doi) citation.citation_doi = b.doi;
+  // Full-text PDF for scholarly crawlers (§5) — now that the renderer exists.
+  citation.citation_pdf_url = `${appUrl}/api/v1/research-bulletin/${b.slug}/pdf`;
 
   return {
     title: `${b.title} — ${SERIES_NAME}`,
@@ -129,7 +131,13 @@ export default async function BulletinPage({ params }: { params: Promise<{ slug:
         {' · '}Published by {SERIES_PUBLISHER}
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <a
+          href={`/api/v1/research-bulletin/${b.slug}/pdf`}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-rt-blue px-3 py-1.5 text-sm font-medium text-white hover:bg-rt-blue-dark"
+        >
+          ⬇ Download PDF
+        </a>
         <ShareButton url={url} title={b.title} />
       </div>
 

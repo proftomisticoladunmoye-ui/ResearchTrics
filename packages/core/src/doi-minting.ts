@@ -158,6 +158,35 @@ export interface MintDoiResult {
 }
 
 /**
+ * POST a DataCite `dois` request and return the assigned DOI + state. Shared by
+ * every minting caller (publications, bulletins). Throws a clear error carrying
+ * DataCite's own message when the request is rejected.
+ */
+export async function submitDataCiteDoi(
+  config: DataCiteMintConfig,
+  attributes: Record<string, unknown>,
+  publish: boolean,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ doi: string; state: string }> {
+  const auth = Buffer.from(`${config.repositoryId}:${config.password}`).toString('base64');
+  const res = await fetchImpl(`${config.endpoint}/dois`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/vnd.api+json', authorization: `Basic ${auth}` },
+    body: JSON.stringify({ data: { type: 'dois', attributes } }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    logger.error({ status: res.status, detail: detail.slice(0, 300) }, 'DataCite mint failed');
+    throw badRequest(`DataCite rejected the DOI request (${res.status}). ${detail.slice(0, 200)}`);
+  }
+  const json = (await res.json()) as { data?: { id?: string; attributes?: { state?: string } } };
+  const doi = json.data?.id;
+  const state = json.data?.attributes?.state ?? (publish ? 'findable' : 'draft');
+  if (!doi) throw badRequest('DataCite did not return a DOI');
+  return { doi, state };
+}
+
+/**
  * Mint (or return the existing) DOI for a publication. Guards against
  * double-minting: a work that already has a DOI is returned unchanged. On
  * success the DOI is stored as a verified `doi` identifier and audited.
@@ -209,24 +238,7 @@ export async function mintPublicationDoi(
     publish,
   );
 
-  const auth = Buffer.from(`${config.repositoryId}:${config.password}`).toString('base64');
-  const res = await (opts.fetchImpl ?? fetch)(`${config.endpoint}/dois`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/vnd.api+json',
-      authorization: `Basic ${auth}`,
-    },
-    body: JSON.stringify({ data: { type: 'dois', attributes } }),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    logger.error({ status: res.status, detail: detail.slice(0, 300) }, 'DataCite mint failed');
-    throw badRequest(`DataCite rejected the DOI request (${res.status}). ${detail.slice(0, 200)}`);
-  }
-  const json = (await res.json()) as { data?: { id?: string; attributes?: { state?: string } } };
-  const doi = json.data?.id;
-  const state = json.data?.attributes?.state ?? (publish ? 'findable' : 'draft');
-  if (!doi) throw badRequest('DataCite did not return a DOI');
+  const { doi, state } = await submitDataCiteDoi(config, attributes, publish, opts.fetchImpl);
 
   try {
     await client.$transaction([

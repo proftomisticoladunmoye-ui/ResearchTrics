@@ -5,10 +5,10 @@ import {
   getPublishedBulletinBySlug,
   incrementBulletinView,
   suggestedCitation,
-  bulletinCitationData,
   listCitedBy,
   relatedBulletins,
   authorSlug,
+  seriesConfig,
   BULLETIN_TYPE_LABELS,
   LICENSE_LABELS,
   SERIES_NAME,
@@ -65,6 +65,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (b.publicationDate) citation.citation_publication_date = b.publicationDate.toISOString().slice(0, 10);
   if (b.keywords.length) citation.citation_keywords = b.keywords.join('; ');
   if (b.doi) citation.citation_doi = b.doi;
+  const series = seriesConfig();
+  if (series.issn || series.eissn) citation.citation_issn = (series.eissn ?? series.issn) as string;
   // Full-text PDF for scholarly crawlers (§5) — now that the renderer exists.
   citation.citation_pdf_url = `${appUrl}/api/v1/research-bulletin/${b.slug}/pdf`;
 
@@ -99,7 +101,6 @@ export default async function BulletinPage({ params }: { params: Promise<{ slug:
   const references = Array.isArray(b.references) ? (b.references as unknown as BulletinReference[]) : [];
   const url = `${appUrl}/research-bulletin/${b.slug}`;
   const citation = suggestedCitation(b, appUrl);
-  const cd = bulletinCitationData(b, appUrl);
   const year = b.publicationDate?.getUTCFullYear();
 
   const jsonLd = {
@@ -215,8 +216,16 @@ export default async function BulletinPage({ params }: { params: Promise<{ slug:
         </p>
         <p className="mt-1">
           {SERIES_NAME} · No. {numberLabel(b.number)} · {SERIES_PUBLISHER}
-          {cd.doi ? ` · https://doi.org/${cd.doi}` : ''}
+          {seriesConfig().issn ? ` · ISSN ${seriesConfig().issn}` : ''}
         </p>
+        {b.doi ? (
+          <p className="mt-1">
+            DOI:{' '}
+            <a className="text-rt-blue hover:underline" href={`https://doi.org/${b.doi}`} target="_blank" rel="noopener noreferrer">
+              https://doi.org/{b.doi}
+            </a>
+          </p>
+        ) : null}
       </footer>
     </article>
   );

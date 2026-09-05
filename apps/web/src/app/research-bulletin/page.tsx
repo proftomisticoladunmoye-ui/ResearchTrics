@@ -16,7 +16,10 @@ export const metadata: Metadata = {
   title: `${SERIES_NAME} — scholarly research communication`,
   description:
     'ResearchTrics Research Bulletin is a scholarly research communication series providing accessible, evidence-based insights into research methodology, psychometrics, statistics, artificial intelligence, research technology and emerging developments in knowledge production.',
-  alternates: { canonical: `${appUrl}/research-bulletin` },
+  alternates: {
+    canonical: `${appUrl}/research-bulletin`,
+    types: { 'application/rss+xml': `${appUrl}/research-bulletin/feed.xml` },
+  },
   openGraph: {
     type: 'website',
     title: SERIES_NAME,

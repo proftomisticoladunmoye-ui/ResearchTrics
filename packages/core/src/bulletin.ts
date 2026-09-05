@@ -5,8 +5,11 @@ import { prisma, type PrismaClient, type Prisma, type BulletinType, type Bulleti
 export type { BulletinType, BulletinStatus } from '@researchtrics/db';
 import { slugify, slugWithSuffix } from './id';
 import { badRequest, notFound } from './errors';
+import { logger } from './logger';
 import { sanitizeBulletinHtml, htmlToPlainText } from './html-sanitize';
 import { formatCitation, type CitationData, type CitationFormat } from './citation-export';
+import { dataCiteConfigFromEnv, buildDataCiteAttributes, submitDataCiteDoi, isDataCiteMintConfigured } from './doi-minting';
+import { zenodoConfigFromEnv, isZenodoConfigured, mintZenodoDoi } from './zenodo';
 
 /**
  * ResearchTrics Research Bulletin service (Phase 1 — scholarly publication
@@ -507,4 +510,135 @@ export async function getBulletinAuthorProfile(slug: string, client: PrismaClien
   }
   if (bulletins.length === 0) return null;
   return { name, slug, affiliation, orcid, bulletins };
+}
+
+// --- Scholarly infrastructure: series config + DOI (§20, §21, §50) ----------
+
+export interface SeriesConfig {
+  name: string;
+  publisher: string;
+  /** Present only when a real ISSN/eISSN has been registered — never fabricated. */
+  issn: string | null;
+  eissn: string | null;
+  frequency: string;
+  language: string;
+  country: string | null;
+  description: string;
+}
+
+/**
+ * Publication-series metadata (§21, §50). ISSN/eISSN come from env and are shown
+ * ONLY when actually registered — the interface accommodates them without ever
+ * implying an ISSN that does not exist.
+ */
+export function seriesConfig(env: NodeJS.ProcessEnv = process.env): SeriesConfig {
+  return {
+    name: SERIES_NAME,
+    publisher: SERIES_PUBLISHER,
+    issn: env.BULLETIN_ISSN?.trim() || null,
+    eissn: env.BULLETIN_EISSN?.trim() || null,
+    frequency: env.BULLETIN_FREQUENCY?.trim() || 'Continuous',
+    language: env.BULLETIN_LANGUAGE?.trim() || 'en',
+    country: env.BULLETIN_COUNTRY?.trim() || null,
+    description: 'A scholarly research communication series published by ResearchTrics.',
+  };
+}
+
+export type DoiProvider = 'zenodo' | 'datacite' | null;
+
+/** Which DOI backend is active: Zenodo (free, preferred) → DataCite → none. */
+export function bulletinDoiProvider(env: NodeJS.ProcessEnv = process.env): DoiProvider {
+  if (isZenodoConfigured(env)) return 'zenodo';
+  if (isDataCiteMintConfigured(env)) return 'datacite';
+  return null;
+}
+
+/** True when any DOI backend is configured. */
+export function isBulletinDoiEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return bulletinDoiProvider(env) !== null;
+}
+
+export interface MintBulletinDoiResult {
+  doi: string;
+  status: 'minted' | 'exists';
+  state: string;
+  provider: 'zenodo' | 'datacite';
+}
+
+/**
+ * Mint a DOI for a published bulletin (§20). Prefers Zenodo (free, no
+ * membership; requires the PDF as the deposited file) and falls back to
+ * DataCite. Credential-gated and idempotent (a bulletin that already has a DOI
+ * is returned unchanged). Stores doi/doiStatus/doiRegisteredAt. A DOI is never
+ * displayed unless it was actually registered.
+ */
+export async function mintBulletinDoi(
+  bulletinId: string,
+  opts: { publish?: boolean; appUrl?: string; fetchImpl?: typeof fetch; pdf?: Uint8Array } = {},
+  client: PrismaClient = prisma,
+): Promise<MintBulletinDoiResult> {
+  const provider = bulletinDoiProvider();
+  if (!provider) {
+    throw badRequest(
+      'DOI minting is not configured on this server. Set ZENODO_TOKEN (free) or the DATACITE_* variables.',
+    );
+  }
+  const b = await client.researchBulletin.findUnique({ where: { id: bulletinId } });
+  if (!b) throw notFound('Bulletin not found.');
+  if (b.status !== 'published') throw badRequest('Publish the bulletin before minting a DOI.');
+  if (b.doi) return { doi: b.doi, status: 'exists', state: b.doiStatus ?? 'existing', provider };
+
+  const appUrl = (opts.appUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.researchtrics.com').replace(/\/$/, '');
+  const landingUrl = `${appUrl}/research-bulletin/${b.slug}`;
+  const publish = opts.publish ?? true;
+  const authors = Array.isArray(b.authors) ? (b.authors as unknown as BulletinAuthor[]) : [];
+
+  let doi: string;
+  let state: string;
+  if (provider === 'zenodo') {
+    if (!opts.pdf) throw badRequest('The bulletin PDF is required to deposit to Zenodo.');
+    const zres = await mintZenodoDoi(
+      zenodoConfigFromEnv()!,
+      {
+        title: b.title,
+        description: b.abstract,
+        creators: authors.map((a) => ({ name: a.name, affiliation: a.affiliation, orcid: a.orcid })),
+        publicationDate: b.publicationDate ? b.publicationDate.toISOString().slice(0, 10) : undefined,
+        keywords: b.keywords,
+        url: landingUrl,
+        file: opts.pdf,
+        filename: `research-bulletin-${b.number ?? b.slug}.pdf`,
+      },
+      opts.fetchImpl,
+    );
+    doi = zres.doi;
+    state = zres.state;
+  } else {
+    const config = dataCiteConfigFromEnv()!;
+    const attributes = buildDataCiteAttributes(
+      {
+        title: b.title,
+        slug: b.slug,
+        outputType: 'research_report',
+        abstract: b.abstract,
+        publishedYear: b.publicationDate ? b.publicationDate.getUTCFullYear() : null,
+        publisher: SERIES_PUBLISHER,
+        journalName: b.number != null ? `${SERIES_NAME}, No. ${b.number}` : SERIES_NAME,
+        authors: authors.map((a) => ({ rawName: a.name, givenName: null, familyName: null, orcid: a.orcid ?? null })),
+      },
+      landingUrl,
+      config.prefix,
+      publish,
+    );
+    const dres = await submitDataCiteDoi(config, attributes, publish, opts.fetchImpl);
+    doi = dres.doi;
+    state = dres.state;
+  }
+
+  await client.researchBulletin.update({
+    where: { id: bulletinId },
+    data: { doi: doi.toLowerCase(), doiStatus: state, doiRegisteredAt: new Date() },
+  });
+  logger.info({ bulletinId, doi, state, provider }, 'Bulletin DOI minted');
+  return { doi, status: 'minted', state, provider };
 }

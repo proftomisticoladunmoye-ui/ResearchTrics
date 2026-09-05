@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { extractInternalCitationSlugs, authorSlug } from './bulletin';
+import { extractInternalCitationSlugs, authorSlug, bulletinDoiProvider, seriesConfig } from './bulletin';
+import { zenodoConfigFromEnv, isZenodoConfigured } from './zenodo';
 
 describe('extractInternalCitationSlugs', () => {
   it('finds internal bulletin links (relative and absolute) and dedups', () => {
@@ -26,5 +27,46 @@ describe('authorSlug', () => {
   it('normalizes an author name to a stable slug', () => {
     expect(authorSlug('Oladunmoye, E. O.')).toBe(authorSlug('Oladunmoye, E. O.'));
     expect(authorSlug('Ada Lovelace')).toMatch(/^ada-lovelace$/);
+  });
+});
+
+describe('zenodoConfigFromEnv', () => {
+  it('is null without a token; picks sandbox vs production by env', () => {
+    expect(zenodoConfigFromEnv({})).toBeNull();
+    expect(isZenodoConfigured({ ZENODO_TOKEN: 't' })).toBe(true);
+    expect(zenodoConfigFromEnv({ ZENODO_TOKEN: 't' })?.baseUrl).toBe('https://sandbox.zenodo.org/api');
+    expect(zenodoConfigFromEnv({ ZENODO_TOKEN: 't', ZENODO_ENVIRONMENT: 'production' })?.baseUrl).toBe('https://zenodo.org/api');
+  });
+});
+
+describe('bulletinDoiProvider', () => {
+  it('prefers Zenodo, then DataCite, else none', () => {
+    expect(bulletinDoiProvider({})).toBeNull();
+    expect(bulletinDoiProvider({ ZENODO_TOKEN: 't' })).toBe('zenodo');
+    expect(
+      bulletinDoiProvider({
+        DATACITE_ENDPOINT: 'https://api.test.datacite.org',
+        DATACITE_REPOSITORY_ID: 'A.B',
+        DATACITE_PASSWORD: 'p',
+        DATACITE_PREFIX: '10.1',
+      }),
+    ).toBe('datacite');
+    // Zenodo wins when both are configured.
+    expect(
+      bulletinDoiProvider({
+        ZENODO_TOKEN: 't',
+        DATACITE_ENDPOINT: 'https://api.test.datacite.org',
+        DATACITE_REPOSITORY_ID: 'A.B',
+        DATACITE_PASSWORD: 'p',
+        DATACITE_PREFIX: '10.1',
+      }),
+    ).toBe('zenodo');
+  });
+});
+
+describe('seriesConfig', () => {
+  it('exposes ISSN only when set (never fabricated)', () => {
+    expect(seriesConfig({}).issn).toBeNull();
+    expect(seriesConfig({ BULLETIN_ISSN: '1234-5678' }).issn).toBe('1234-5678');
   });
 });

@@ -1370,6 +1370,25 @@ async function main() {
     await core.publishBulletin(citing.id);
     check('citation edge pruned when the link is removed', !(await core.listCitedBy(pub!.id)).some((c) => c.slug === citingPub.slug));
 
+    // Phase 4: DOI minting via Zenodo (free) — mocked 4-call deposition flow.
+    process.env.ZENODO_TOKEN = 'smoke-zenodo-token';
+    process.env.ZENODO_ENVIRONMENT = 'sandbox';
+    check('DOI provider resolves to Zenodo when a token is set', core.bulletinDoiProvider() === 'zenodo');
+    const jsonRes = (obj: unknown) => ({ ok: true, status: 200, json: async () => obj, text: async () => '' });
+    const fakeZenodo = (async (u: string, init?: { method?: string }) => {
+      if (u.includes('/actions/publish')) return jsonRes({ doi: '10.5281/zenodo.9999', links: { record_html: 'https://sandbox.zenodo.org/record/9999' }, state: 'done' });
+      if (u.includes('/deposit/depositions') && init?.method === 'POST') return jsonRes({ id: 9999, links: { bucket: 'https://sandbox.zenodo.org/api/files/bucket9999' } });
+      return jsonRes({});
+    }) as unknown as typeof fetch;
+    const pdfForDoi = new Uint8Array(await core.renderBulletinPdf(pub!, 'https://www.researchtrics.com'));
+    const mintedDoi = await core.mintBulletinDoi(pub!.id, { fetchImpl: fakeZenodo, pdf: pdfForDoi });
+    check('Zenodo DOI minted for the bulletin', mintedDoi.provider === 'zenodo' && mintedDoi.doi === '10.5281/zenodo.9999');
+    check('bulletin record stores the minted DOI', (await core.getBulletinById(pub!.id))!.doi === '10.5281/zenodo.9999');
+    const remint = await core.mintBulletinDoi(pub!.id, { fetchImpl: fakeZenodo, pdf: pdfForDoi });
+    check('re-minting a bulletin DOI is idempotent', remint.status === 'exists' && remint.doi === '10.5281/zenodo.9999');
+    delete process.env.ZENODO_TOKEN;
+    delete process.env.ZENODO_ENVIRONMENT;
+
     console.log('\nImpact report (§premium)');
     const reportDeep = await core.buildImpactReport(reg.researcher.id, { deep: true });
     check(

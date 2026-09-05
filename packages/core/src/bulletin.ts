@@ -3,7 +3,7 @@ import { prisma, type PrismaClient, type Prisma, type BulletinType, type Bulleti
 // Re-export the Prisma enum types so app code imports them from core (its single
 // domain entry point) rather than reaching into the db package directly.
 export type { BulletinType, BulletinStatus } from '@researchtrics/db';
-import { slugWithSuffix } from './id';
+import { slugify, slugWithSuffix } from './id';
 import { badRequest, notFound } from './errors';
 import { sanitizeBulletinHtml, htmlToPlainText } from './html-sanitize';
 import { formatCitation, type CitationData, type CitationFormat } from './citation-export';
@@ -209,6 +209,8 @@ export async function publishBulletin(id: string, client: PrismaClient = prisma)
         publicationDate: b.publicationDate ?? new Date(),
       },
     });
+    // Record internal citation edges from the body (knowledge graph, §15/§16).
+    await syncBulletinCitations(id, b.bodyHtml, tx as PrismaClient);
     return { number: number!, slug: b.slug };
   });
 }
@@ -367,4 +369,142 @@ export function suggestedCitation(b: BulletinDetail, appUrl: string): string {
 /** Render a bulletin citation in any supported format. */
 export function bulletinCitation(b: BulletinDetail, appUrl: string, format: CitationFormat): string {
   return formatCitation(bulletinCitationData(b, appUrl), format);
+}
+
+// --- Knowledge network (§15, §16, §17, §30) --------------------------------
+
+/** Extract internal-bulletin slugs referenced by links in the body HTML. */
+export function extractInternalCitationSlugs(bodyHtml: string): string[] {
+  const slugs = new Set<string>();
+  const re = /href\s*=\s*["'](?:https?:\/\/[^/"']+)?\/research-bulletin\/([a-z0-9-]+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(bodyHtml)) !== null) slugs.add(m[1]!.toLowerCase());
+  return [...slugs];
+}
+
+/**
+ * Reconcile a bulletin's outgoing internal-citation edges from links in its
+ * body. Resolves each referenced slug to a published bulletin, skips
+ * self-citation, and removes stale edges. Idempotent.
+ */
+export async function syncBulletinCitations(
+  citingId: string,
+  bodyHtml: string,
+  client: PrismaClient = prisma,
+): Promise<{ edges: number }> {
+  const slugs = extractInternalCitationSlugs(bodyHtml);
+  const targets = slugs.length
+    ? await client.researchBulletin.findMany({
+        where: { slug: { in: slugs }, status: 'published', id: { not: citingId } },
+        select: { id: true },
+      })
+    : [];
+  const citedIds = targets.map((t) => t.id);
+
+  await client.bulletinCitation.deleteMany({
+    where: { citingId, ...(citedIds.length ? { citedId: { notIn: citedIds } } : {}) },
+  });
+  for (const citedId of citedIds) {
+    await client.bulletinCitation
+      .create({ data: { citingId, citedId } })
+      .catch(() => {}); // unique(citing,cited) → ignore dup
+  }
+  return { edges: citedIds.length };
+}
+
+/** Bulletins that cite THIS one — the public "Cited by" list (published only). */
+export async function listCitedBy(bulletinId: string, client: PrismaClient = prisma): Promise<BulletinListItem[]> {
+  const edges = await client.bulletinCitation.findMany({
+    where: { citedId: bulletinId, citing: { status: 'published' } },
+    include: { citing: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  return edges.map((e) => toListItem(e.citing));
+}
+
+/** Bulletins THIS one cites (published only). */
+export async function listOutgoingCitations(bulletinId: string, client: PrismaClient = prisma): Promise<BulletinListItem[]> {
+  const edges = await client.bulletinCitation.findMany({
+    where: { citingId: bulletinId, cited: { status: 'published' } },
+    include: { cited: true },
+  });
+  return edges.map((e) => toListItem(e.cited));
+}
+
+/**
+ * Related bulletins (§17): other published bulletins sharing keywords, category,
+ * or a citation edge with this one, ranked by overlap then recency.
+ */
+export async function relatedBulletins(
+  bulletinId: string,
+  limit = 5,
+  client: PrismaClient = prisma,
+): Promise<BulletinListItem[]> {
+  const b = await client.researchBulletin.findUnique({
+    where: { id: bulletinId },
+    select: { keywords: true, category: true, type: true },
+  });
+  if (!b) return [];
+  const candidates = await client.researchBulletin.findMany({
+    where: {
+      status: 'published',
+      id: { not: bulletinId },
+      OR: [
+        { keywords: { hasSome: b.keywords } },
+        { category: b.category },
+        { citesOut: { some: { citedId: bulletinId } } },
+        { citedBy: { some: { citingId: bulletinId } } },
+      ],
+    },
+    take: 50,
+    orderBy: { publicationDate: 'desc' },
+  });
+  const scored = candidates
+    .map((c) => {
+      const shared = c.keywords.filter((k) => b.keywords.includes(k)).length;
+      const score = shared * 3 + (c.category === b.category ? 2 : 0) + (c.type === b.type ? 1 : 0);
+      return { c, score };
+    })
+    .sort((x, y) => y.score - x.score || (y.c.publicationDate?.getTime() ?? 0) - (x.c.publicationDate?.getTime() ?? 0))
+    .slice(0, limit);
+  return scored.map((s) => toListItem(s.c));
+}
+
+// --- Authors (§22, §23) -----------------------------------------------------
+
+/** Stable slug for an author name, used for the public author page URL. */
+export function authorSlug(name: string): string {
+  return slugify(name);
+}
+
+export interface BulletinAuthorProfile {
+  name: string;
+  slug: string;
+  affiliation: string | null;
+  orcid: string | null;
+  bulletins: BulletinListItem[];
+}
+
+/**
+ * Aggregate a public author profile by name-slug: their published bulletins and
+ * the most complete affiliation/ORCID seen across them. v1 scans published
+ * bulletins in-app (author list is JSON); normalize when volume warrants.
+ */
+export async function getBulletinAuthorProfile(slug: string, client: PrismaClient = prisma): Promise<BulletinAuthorProfile | null> {
+  const rows = await client.researchBulletin.findMany({ where: { status: 'published' }, orderBy: { publicationDate: 'desc' } });
+  let name = '';
+  let affiliation: string | null = null;
+  let orcid: string | null = null;
+  const bulletins: BulletinListItem[] = [];
+  for (const r of rows) {
+    const authors = Array.isArray(r.authors) ? (r.authors as unknown as BulletinAuthor[]) : [];
+    const match = authors.find((a) => authorSlug(a.name) === slug);
+    if (!match) continue;
+    if (!name) name = match.name;
+    if (!affiliation && match.affiliation) affiliation = match.affiliation;
+    if (!orcid && match.orcid) orcid = match.orcid;
+    bulletins.push(toListItem(r));
+  }
+  if (bulletins.length === 0) return null;
+  return { name, slug, affiliation, orcid, bulletins };
 }

@@ -701,11 +701,30 @@ model ResearchBulletin {
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
   authorUser User? @relation("BulletinAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+  citesOut   BulletinCitation[] @relation("Citing")
+  citedBy    BulletinCitation[] @relation("Cited")
 
   @@index([status, publicationDate])
   @@index([type])
   @@index([category])
   @@map("research_bulletins")
+}
+
+/// A directed internal citation edge: `citing` bulletin references `cited`
+/// bulletin. Derived from links in the body on publish; powers "Cited by" and
+/// the research knowledge graph (§15, §16, §30).
+model BulletinCitation {
+  id        String   @id @default(uuid())
+  citingId  String   @map("citing_id")
+  citedId   String   @map("cited_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  citing ResearchBulletin @relation("Citing", fields: [citingId], references: [id], onDelete: Cascade)
+  cited  ResearchBulletin @relation("Cited", fields: [citedId], references: [id], onDelete: Cascade)
+
+  @@unique([citingId, citedId])
+  @@index([citedId])
+  @@map("bulletin_citations")
 }
 
 /// Single-use tokens for email verification / password reset (Spec §38, §40).

@@ -6,12 +6,16 @@ import {
   incrementBulletinView,
   suggestedCitation,
   bulletinCitationData,
+  listCitedBy,
+  relatedBulletins,
+  authorSlug,
   BULLETIN_TYPE_LABELS,
   LICENSE_LABELS,
   SERIES_NAME,
   SERIES_PUBLISHER,
   type BulletinAuthor,
   type BulletinReference,
+  type BulletinListItem,
 } from '@researchtrics/core';
 import { Badge } from '@researchtrics/ui';
 import { ShareButton } from '@/components/share-button';
@@ -21,6 +25,25 @@ const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.researchtrics.com
 
 function numberLabel(n: number | null): string {
   return n == null ? '' : String(n).padStart(3, '0');
+}
+
+/** A compact list of linked bulletins — used for "Cited by" and "Related". */
+function BulletinRefList({ heading, items }: { heading: string; items: BulletinListItem[] }) {
+  return (
+    <section className="mt-10">
+      <h2 className="text-lg font-semibold text-rt-text">{heading}</h2>
+      <ul className="mt-3 space-y-2">
+        {items.map((it) => (
+          <li key={it.slug} className="text-sm">
+            <Link href={`/research-bulletin/${it.slug}`} className="text-rt-blue hover:underline">
+              {it.number != null ? `No. ${numberLabel(it.number)} · ` : ''}{it.title}
+            </Link>
+            <span className="text-rt-muted"> — {it.authors.map((a) => a.name).join(', ') || 'ResearchTrics'}{it.publicationDate ? `, ${it.publicationDate.getUTCFullYear()}` : ''}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -71,6 +94,7 @@ export default async function BulletinPage({ params }: { params: Promise<{ slug:
 
   void incrementBulletinView(b.id); // fire-and-forget
 
+  const [citedBy, related] = await Promise.all([listCitedBy(b.id), relatedBulletins(b.id, 5)]);
   const authors = Array.isArray(b.authors) ? (b.authors as unknown as BulletinAuthor[]) : [];
   const references = Array.isArray(b.references) ? (b.references as unknown as BulletinReference[]) : [];
   const url = `${appUrl}/research-bulletin/${b.slug}`;
@@ -119,7 +143,9 @@ export default async function BulletinPage({ params }: { params: Promise<{ slug:
           {authors.map((a, i) => (
             <span key={i}>
               {i > 0 ? ', ' : ''}
-              {a.name}
+              <Link href={`/research-bulletin/authors/${authorSlug(a.name)}`} className="text-rt-blue hover:underline">
+                {a.name}
+              </Link>
               {a.affiliation ? <span className="text-rt-muted"> ({a.affiliation})</span> : null}
             </span>
           ))}
@@ -177,6 +203,9 @@ export default async function BulletinPage({ params }: { params: Promise<{ slug:
           </ol>
         </section>
       ) : null}
+
+      {citedBy.length > 0 ? <BulletinRefList heading="Cited by" items={citedBy} /> : null}
+      {related.length > 0 ? <BulletinRefList heading="Related Research Bulletins" items={related} /> : null}
 
       <BulletinCitations slug={b.slug} suggested={citation} year={year} />
 

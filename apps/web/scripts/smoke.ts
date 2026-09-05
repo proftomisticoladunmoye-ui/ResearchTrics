@@ -1340,6 +1340,36 @@ async function main() {
     await core.incrementBulletinDownload(pub!.id);
     check('bulletin download counter increments', (await core.getBulletinById(pub!.id))!.downloadCount === 1);
 
+    // Phase 3: knowledge network — a second bulletin cites the first.
+    const citing = await core.createBulletin(
+      {
+        title: 'Applying Measurement Invariance in Practice',
+        type: 'psychometric',
+        category: 'Psychometrics',
+        abstract:
+          'A practical follow-up showing how to apply invariance testing to a real cross-cultural dataset, building directly on the foundational primer in an earlier bulletin of this series.',
+        keywords: ['measurement invariance', 'applied', 'DIF'],
+        bodyHtml: `<h2>Background</h2><p>This bulletin builds directly on <a href="/research-bulletin/${published.slug}">the earlier methodological primer</a>, extending its framework to applied practice with a fully worked cross-cultural example, step-by-step model specification, and detailed interpretation guidance so that researchers can apply configural, metric, and scalar invariance testing to their own multi-group datasets with confidence.</p>`,
+        authors: [{ name: 'Oladunmoye, E. O.', affiliation: 'ResearchTrics', order: 0 }],
+        references: [{ raw: 'Author, A. (2025). Applied invariance. Journal of Testing, 2(1), 1–12.' }],
+      },
+      reg.user.id,
+    );
+    const citingPub = await core.publishBulletin(citing.id);
+    const citedBy = await core.listCitedBy(pub!.id);
+    check('internal citation edge recorded — bulletin appears in "Cited by"', citedBy.some((c) => c.slug === citingPub.slug));
+    const outgoing = await core.listOutgoingCitations(citing.id);
+    check('outgoing citations list the cited bulletin', outgoing.some((o) => o.slug === published.slug));
+    const related = await core.relatedBulletins(pub!.id, 5);
+    check('related bulletins surface a keyword/citation-linked bulletin', related.some((r) => r.slug === citingPub.slug));
+    const authorProfile = await core.getBulletinAuthorProfile(core.authorSlug('Oladunmoye, E. O.'));
+    check('author profile aggregates the author’s published bulletins', !!authorProfile && authorProfile.bulletins.length >= 2);
+    // Removing the citing link on re-publish prunes the edge (idempotent sync).
+    await core.setBulletinStatus(citing.id, 'draft');
+    await core.updateBulletin(citing.id, { bodyHtml: '<h2>Background</h2><p>This revision removes the internal link entirely. The body is nonetheless kept comfortably long so that it continues to satisfy the publication readiness threshold for main content, letting us verify that the citation edge is pruned on re-publish rather than retained from the previous version.</p>' });
+    await core.publishBulletin(citing.id);
+    check('citation edge pruned when the link is removed', !(await core.listCitedBy(pub!.id)).some((c) => c.slug === citingPub.slug));
+
     console.log('\nImpact report (§premium)');
     const reportDeep = await core.buildImpactReport(reg.researcher.id, { deep: true });
     check(

@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Input, Alert, Card } from '@researchtrics/ui';
+
+interface CiteResult { number: number | null; slug: string; title: string; year: number | null; authors: string[] }
 
 const TYPES: Array<{ value: string; label: string }> = [
   { value: 'research', label: 'Research Bulletin' },
@@ -64,8 +66,41 @@ export function BulletinEditor({ initial }: { initial?: BulletinInitial }) {
   const [msg, setMsg] = useState<{ kind: 'error' | 'success'; text: string } | null>(null);
   const [importing, setImporting] = useState(false);
   const [report, setReport] = useState<Record<string, unknown> | null>(null);
+  const [citeQ, setCiteQ] = useState('');
+  const [citeResults, setCiteResults] = useState<CiteResult[]>([]);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const set = (patch: Partial<BulletinInitial>) => setF((prev) => ({ ...prev, ...patch }));
+
+  // Debounced search of published bulletins for the internal citation picker.
+  useEffect(() => {
+    const q = citeQ.trim();
+    if (q.length < 2) { setCiteResults([]); return; }
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/v1/research-bulletin/search?q=${encodeURIComponent(q)}`, { signal: ctrl.signal });
+        if (!res.ok) return;
+        const body = (await res.json()) as { data?: { items: CiteResult[] } };
+        setCiteResults(body.data?.items ?? []);
+      } catch { /* aborted */ }
+    }, 250);
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [citeQ]);
+
+  function insertCitation(r: CiteResult) {
+    const first = r.authors[0] ?? 'ResearchTrics';
+    const family = first.includes(',') ? first.split(',')[0]!.trim() : first.split(/\s+/).pop() ?? first;
+    const yr = r.year ?? 'n.d.';
+    const no = r.number != null ? String(r.number).padStart(3, '0') : '';
+    const link = `<a href="/research-bulletin/${r.slug}">${family} (${yr}). ${r.title}. ResearchTrics Research Bulletin, ${no}.</a>`;
+    const ta = bodyRef.current;
+    const pos = ta ? ta.selectionStart : f.bodyHtml.length;
+    const next = f.bodyHtml.slice(0, pos) + link + f.bodyHtml.slice(pos);
+    set({ bodyHtml: next });
+    setCiteQ('');
+    setCiteResults([]);
+  }
 
   async function importDocx(file: File) {
     setImporting(true);
@@ -250,9 +285,26 @@ export function BulletinEditor({ initial }: { initial?: BulletinInitial }) {
           <span className="mb-1 block text-sm font-medium text-rt-text">Abstract</span>
           <textarea value={f.abstract} onChange={(e) => set({ abstract: e.target.value })} rows={5} maxLength={5000} className={input} />
         </label>
+        {/* Internal citation picker — cite another bulletin, inserted at the cursor */}
+        <div className="rounded border border-rt-border bg-rt-blue-light/10 p-3">
+          <span className="text-xs font-semibold text-rt-text">Cite another Research Bulletin</span>
+          <Input value={citeQ} onChange={(e) => setCiteQ(e.target.value)} placeholder="Search published bulletins to insert an internal citation…" className="mt-1" />
+          {citeResults.length > 0 ? (
+            <ul className="mt-1 max-h-48 overflow-auto rounded border border-rt-border bg-rt-white">
+              {citeResults.map((r) => (
+                <li key={r.slug}>
+                  <button type="button" onClick={() => insertCitation(r)} className="block w-full px-3 py-2 text-left text-xs hover:bg-rt-blue-light/30">
+                    <span className="font-mono text-rt-muted">No. {r.number != null ? String(r.number).padStart(3, '0') : '—'}</span>{' '}
+                    <span className="font-medium text-rt-text">{r.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-rt-text">Body (semantic HTML — headings, paragraphs, tables, figures, YouTube embeds)</span>
-          <textarea value={f.bodyHtml} onChange={(e) => set({ bodyHtml: e.target.value })} rows={18} className={`${input} font-mono text-xs`} placeholder="<h2>Introduction</h2>\n<p>…</p>" />
+          <textarea ref={bodyRef} value={f.bodyHtml} onChange={(e) => set({ bodyHtml: e.target.value })} rows={18} className={`${input} font-mono text-xs`} placeholder="<h2>Introduction</h2>\n<p>…</p>" />
           <span className="mt-1 block text-xs text-rt-muted">HTML is sanitized on save. Allowed: headings, lists, tables, figures/captions, blockquotes, images, code, and YouTube/Vimeo embeds.</span>
         </label>
       </Card>

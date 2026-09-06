@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@researchtrics/db';
-import { probeObjectStorage, bulletinDoiProvider, bulletinCommentsEnabled } from '@researchtrics/core';
+import { probeObjectStorage, bulletinDoiProvider, bulletinCommentsEnabled, zenodoConfigFromEnv } from '@researchtrics/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +30,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // `?doi=1` reports which DOI backend is configured (no secrets) so bulletin
   // DOI minting can be verified without a real mint.
   if (req.nextUrl.searchParams.get('doi') === '1') {
-    checks.doi = { provider: bulletinDoiProvider() ?? 'none', comments: bulletinCommentsEnabled() };
+    const provider = bulletinDoiProvider() ?? 'none';
+    // Surface which Zenodo environment is active so an operator can confirm a
+    // sandbox token (safe to test) vs production (permanent) before minting.
+    const zenodo = zenodoConfigFromEnv();
+    const environment = provider === 'zenodo' ? (zenodo?.baseUrl.includes('sandbox') ? 'sandbox' : 'production') : null;
+    checks.doi = { provider, ...(environment ? { environment } : {}), comments: bulletinCommentsEnabled() };
   }
 
   const storageOk = !checks.storage || (checks.storage as { ok?: boolean }).ok !== false;

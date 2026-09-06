@@ -218,7 +218,7 @@ export function BulletinEditor({ initial }: { initial?: BulletinInitial }) {
             <ul className="mt-1 space-y-0.5">
               <li>{report.titleDetected ? '✓' : '⚠'} Title {report.titleDetected ? 'detected' : 'not detected — set it manually'}</li>
               <li>✓ {String(report.headings)} headings · {String(report.paragraphs)} paragraphs</li>
-              <li>✓ {String(report.tables)} tables · {String(report.images)} images ({String(report.imagesUploaded)} uploaded, {String(report.imagesInlined)} inlined)</li>
+              <li>✓ {String(report.tables)} tables · {String(report.imagesUploaded)} images imported{Number(report.imagesUnconvertible) > 0 ? ` · ${String(report.imagesUnconvertible)} diagram(s) not web-displayable` : ''}</li>
               <li>✓ {String(report.links)} links · {String(report.youtube)} YouTube embeds · {String(report.references)} references detected</li>
             </ul>
             {Array.isArray(report.warnings) && report.warnings.length > 0 ? (

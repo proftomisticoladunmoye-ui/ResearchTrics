@@ -28,6 +28,20 @@ describe('processImportedHtml', () => {
     expect(r.bodyHtml).not.toContain('<script');
   });
 
+  it('wraps a standalone image (with its caption) in a <figure>', () => {
+    const r = processImportedHtml('<h2>T</h2><p><img src="https://cdn/x.png" alt="chart"></p><p>Figure 1. A chart.</p>');
+    expect(r.bodyHtml).toContain('<figure>');
+    expect(r.bodyHtml).toContain('<figcaption>Figure 1. A chart.</figcaption>');
+    expect(r.bodyHtml).toContain('src="https://cdn/x.png"');
+  });
+
+  it('drops unconvertible (empty-src) images and reports them', () => {
+    const r = processImportedHtml('<h2>T</h2><p>text</p><p><img src=""></p>', { imagesUnconvertible: 2 });
+    expect(r.bodyHtml).not.toContain('<img');
+    expect(r.report.imagesUnconvertible).toBe(2);
+    expect(r.report.warnings.some((w) => /vector diagrams|EMF/i.test(w))).toBe(true);
+  });
+
   it('counts headings, paragraphs, tables and references', () => {
     const html = `
       <h1>Title</h1>

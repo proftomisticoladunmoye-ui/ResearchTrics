@@ -1,7 +1,7 @@
 import mammoth from 'mammoth';
 import { parse as parseHtml, type HTMLElement } from 'node-html-parser';
 import { prisma, type PrismaClient } from '@researchtrics/db';
-import { storeFile, isAllowedUploadMime } from './storage';
+import { storeFile } from './storage';
 import { sanitizeBulletinHtml } from './html-sanitize';
 import { logger } from './logger';
 
@@ -23,6 +23,8 @@ export interface DocxImportReport {
   images: number;
   imagesUploaded: number;
   imagesInlined: number;
+  /** Vector diagrams/charts (EMF/WMF) the web can't display — dropped + reported. */
+  imagesUnconvertible: number;
   links: number;
   youtube: number;
   references: number;
@@ -53,37 +55,46 @@ export async function importDocx(
 ): Promise<DocxImportResult> {
   let imagesUploaded = 0;
   let imagesInlined = 0;
+  let imagesUnconvertible = 0;
   const warnings: string[] = [];
 
-  // Mammoth → HTML, uploading each embedded image to object storage when its
-  // format is storable, else inlining it as a data URI so nothing is lost.
+  // Web-renderable raster formats. Word DIAGRAMS/CHARTS/SmartArt are usually
+  // stored as vector EMF/WMF (image/x-emf, image/x-wmf), which browsers cannot
+  // display — we cannot faithfully rasterize those server-side, so they are
+  // dropped from the body and reported for the author to re-insert as pictures.
+  const WEB_IMAGE = /^image\/(png|jpe?g|gif|webp)$/i;
+
   const { value: rawHtml, messages } = await mammoth.convertToHtml(
     { buffer },
     {
       convertImage: mammoth.images.imgElement(async (image) => {
-        const contentType = image.contentType || 'application/octet-stream';
-        const b64 = await image.read('base64');
-        if (isAllowedUploadMime(contentType)) {
-          try {
-            const bytes = Buffer.from(b64, 'base64');
-            const stored = await storeFile(
-              {
-                data: new Uint8Array(bytes),
-                filename: `bulletin-image.${contentType.split('/')[1] ?? 'bin'}`,
-                mimeType: contentType,
-                accessLevel: 'public',
-                uploaderId: opts.uploaderId ?? null,
-              },
-              client,
-            );
-            imagesUploaded += 1;
-            return { src: stored.url };
-          } catch (err) {
-            logger.warn({ err: (err as Error).message }, 'DOCX image upload failed; inlining instead');
-          }
+        const contentType = (image.contentType || 'application/octet-stream').toLowerCase();
+        if (!WEB_IMAGE.test(contentType)) {
+          // e.g. image/x-emf, image/x-wmf, image/tiff, image/bmp — not usable on
+          // the web. Emit an empty src marker; post-processing removes it.
+          imagesUnconvertible += 1;
+          return { src: '' };
         }
-        imagesInlined += 1;
-        return { src: `data:${contentType};base64,${b64}` };
+        const b64 = await image.read('base64');
+        try {
+          const bytes = Buffer.from(b64, 'base64');
+          const stored = await storeFile(
+            {
+              data: new Uint8Array(bytes),
+              filename: `bulletin-image.${contentType.split('/')[1] ?? 'bin'}`,
+              mimeType: contentType,
+              accessLevel: 'public',
+              uploaderId: opts.uploaderId ?? null,
+            },
+            client,
+          );
+          imagesUploaded += 1;
+          return { src: stored.url };
+        } catch (err) {
+          logger.warn({ err: (err as Error).message }, 'DOCX image upload failed; inlining instead');
+          imagesInlined += 1;
+          return { src: `data:${contentType};base64,${b64}` };
+        }
       }),
     },
   );
@@ -91,7 +102,7 @@ export async function importDocx(
     if (m.type === 'warning') warnings.push(m.message);
   }
 
-  return processImportedHtml(rawHtml, { imagesUploaded, imagesInlined, warnings });
+  return processImportedHtml(rawHtml, { imagesUploaded, imagesInlined, imagesUnconvertible, warnings });
 }
 
 /**
@@ -101,11 +112,12 @@ export async function importDocx(
  */
 export function processImportedHtml(
   rawHtml: string,
-  extra: { imagesUploaded?: number; imagesInlined?: number; warnings?: string[] } = {},
+  extra: { imagesUploaded?: number; imagesInlined?: number; imagesUnconvertible?: number; warnings?: string[] } = {},
 ): DocxImportResult {
   const warnings = [...(extra.warnings ?? [])];
   const imagesUploaded = extra.imagesUploaded ?? 0;
   const imagesInlined = extra.imagesInlined ?? 0;
+  const imagesUnconvertible = extra.imagesUnconvertible ?? 0;
   const root = parseHtml(rawHtml);
 
   // Title = first heading (h1 preferred, else h2); removed from the body.
@@ -116,6 +128,27 @@ export function processImportedHtml(
     firstHeading.remove();
   }
   if (!title) warnings.push('No title heading detected — set the title manually.');
+
+  // Drop unconvertible-image markers (empty src emitted for EMF/WMF etc.).
+  for (const img of root.querySelectorAll('img')) {
+    if (!(img.getAttribute('src') ?? '').trim()) img.remove();
+  }
+
+  // Wrap each remaining image in a <figure>, pulling an adjacent caption
+  // paragraph ("Figure N…"/"Table N…" or a short line) into <figcaption>, so
+  // images/diagrams keep their position in the flow and render tidily.
+  for (const img of root.querySelectorAll('img')) {
+    if (img.closest('figure')) continue;
+    const host = img.parentNode as HTMLElement | null;
+    const hostIsSoleImageP =
+      !!host && host.tagName?.toLowerCase() === 'p' && host.querySelectorAll('img').length === 1 && host.text.trim() === '';
+    const caption = hostIsSoleImageP ? pickCaption(host) : null;
+    const capHtml = caption ? `<figcaption>${escapeText(caption.text.trim())}</figcaption>` : '';
+    const figure = parseHtml(`<figure>${img.toString()}${capHtml}</figure>`).querySelector('figure')!;
+    if (hostIsSoleImageP) host!.replaceWith(figure);
+    else img.replaceWith(figure);
+    if (caption) caption.remove();
+  }
 
   // YouTube <a> links → responsive iframe embeds.
   let youtube = 0;
@@ -138,13 +171,47 @@ export function processImportedHtml(
   const links = root.querySelectorAll('a').length;
   const references = countReferences(root);
 
+  if (imagesUnconvertible > 0) {
+    warnings.push(
+      `${imagesUnconvertible} image${imagesUnconvertible === 1 ? '' : 's'} could not be imported — they are vector diagrams/charts (EMF/WMF, common for SmartArt or pasted charts) that browsers can't display. In Word, right-click each and "Save as Picture" (PNG/JPEG) then re-insert, or export the page as an image, and re-import.`,
+    );
+  }
+
   const bodyHtml = sanitizeBulletinHtml(root.toString());
 
   return {
     title,
     bodyHtml,
-    report: { titleDetected: title.length > 0, headings, paragraphs, tables, images, imagesUploaded, imagesInlined, links, youtube, references, warnings },
+    report: {
+      titleDetected: title.length > 0,
+      headings,
+      paragraphs,
+      tables,
+      images,
+      imagesUploaded,
+      imagesInlined,
+      imagesUnconvertible,
+      links,
+      youtube,
+      references,
+      warnings,
+    },
   };
+}
+
+/** A caption paragraph immediately after an image's wrapper, if it reads like one. */
+function pickCaption(host: HTMLElement | null): HTMLElement | null {
+  const next = host?.nextElementSibling as HTMLElement | null;
+  if (!next || next.tagName?.toLowerCase() !== 'p') return null;
+  const text = next.text.trim();
+  if (!text) return null;
+  // "Figure 1…", "Fig. 2…", "Table 3…", or a short standalone line.
+  if (/^(figure|fig\.?|table|scheme|plate)\s*\d+/i.test(text) || text.length <= 160) return next;
+  return null;
+}
+
+function escapeText(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /** Best-effort reference count: list items or paragraphs after a References heading. */

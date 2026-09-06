@@ -25,6 +25,8 @@ export const ALLOWED_UPLOAD_MIME: ReadonlySet<string> = new Set([
   'application/pdf',
   'image/png',
   'image/jpeg',
+  'image/gif',
+  'image/webp',
   'text/csv',
   'application/zip',
   'application/json',

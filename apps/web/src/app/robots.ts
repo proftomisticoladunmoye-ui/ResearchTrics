@@ -12,10 +12,12 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: '*',
-        // The files route serves full-text PDFs that Google Scholar must fetch,
-        // so it is allowed while the rest of /api/ stays blocked (more-specific
-        // Allow wins over the broader Disallow).
-        allow: ['/', '/api/v1/files/'],
+        // These API paths serve public scholarly full text + citation metadata
+        // that Google Scholar must fetch (uploaded file PDFs, and the Research
+        // Bulletin PDF/citation routes referenced by citation_pdf_url). They are
+        // allowed while the rest of /api/ stays blocked — a more-specific Allow
+        // wins over the broader Disallow.
+        allow: ['/', '/api/v1/files/', '/api/v1/research-bulletin/'],
         disallow: ['/dashboard', '/admin', '/api/'],
       },
     ],

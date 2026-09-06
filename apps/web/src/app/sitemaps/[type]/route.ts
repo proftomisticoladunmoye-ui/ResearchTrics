@@ -76,10 +76,12 @@ async function buildEntries(type: SitemapType): Promise<SitemapEntry[]> {
       ];
     }
     case 'research-bulletin': {
-      const { listPublishedBulletinSlugs } = await import('@researchtrics/core');
-      const bulletins = await listPublishedBulletinSlugs();
+      const { listPublishedBulletinSlugs, listCollections } = await import('@researchtrics/core');
+      const [bulletins, collections] = await Promise.all([listPublishedBulletinSlugs(), listCollections()]);
       return [
         { loc: `${appUrl}/research-bulletin` },
+        { loc: `${appUrl}/research-bulletin/collections` },
+        ...collections.map((c) => ({ loc: `${appUrl}/research-bulletin/collections/${c.slug}` })),
         ...bulletins.map((b) => ({
           loc: `${appUrl}/research-bulletin/${b.slug}`,
           lastmod: b.updatedAt.toISOString(),

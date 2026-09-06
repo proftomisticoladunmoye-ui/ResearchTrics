@@ -34,6 +34,7 @@ export default async function AdminBulletinsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/admin/research-bulletin/collections" className="text-sm text-rt-blue hover:underline">Collections</Link>
           <Link href="/admin/research-bulletin/analytics" className="text-sm text-rt-blue hover:underline">Analytics</Link>
           <Button asChild size="sm">
             <Link href="/admin/research-bulletin/new">+ New bulletin</Link>

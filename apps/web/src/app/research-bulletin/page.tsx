@@ -65,6 +65,10 @@ export default async function BulletinHubPage({
           methodology, psychometrics, statistics, artificial intelligence, research technology and emerging developments
           in knowledge production. Every bulletin is freely readable, citable, and permanently archived.
         </p>
+        <p className="mt-3 flex flex-wrap gap-4 text-sm">
+          <Link href="/research-bulletin/collections" className="font-medium text-rt-blue hover:underline">Collections &amp; Series →</Link>
+          <a href="/research-bulletin/feed.xml" className="text-rt-muted hover:text-rt-blue">RSS feed</a>
+        </p>
       </header>
 
       {/* Search + filters (GET form — crawlable, no client JS needed) */}

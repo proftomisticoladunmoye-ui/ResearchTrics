@@ -703,6 +703,7 @@ model ResearchBulletin {
   authorUser User? @relation("BulletinAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
   citesOut   BulletinCitation[] @relation("Citing")
   citedBy    BulletinCitation[] @relation("Cited")
+  collections BulletinCollectionMember[]
 
   @@index([status, publicationDate])
   @@index([type])
@@ -725,6 +726,45 @@ model BulletinCitation {
   @@unique([citingId, citedId])
   @@index([citedId])
   @@map("bulletin_citations")
+}
+
+enum BulletinCollectionKind {
+  collection
+  series
+}
+
+/// A curated grouping of Research Bulletins — a thematic `collection` (unordered)
+/// or an ordered `series` (a research curriculum). Public knowledge pathways
+/// (§53, §54).
+model BulletinCollection {
+  id          String                 @id @default(uuid())
+  slug        String                 @unique
+  title       String
+  description String?
+  kind        BulletinCollectionKind @default(collection)
+  published   Boolean                @default(true)
+  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+
+  members BulletinCollectionMember[]
+
+  @@index([published])
+  @@map("bulletin_collections")
+}
+
+/// Membership of a bulletin in a collection, with an order index for series.
+model BulletinCollectionMember {
+  id           String @id @default(uuid())
+  collectionId String @map("collection_id")
+  bulletinId   String @map("bulletin_id")
+  order        Int    @default(0)
+
+  collection BulletinCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  bulletin   ResearchBulletin   @relation(fields: [bulletinId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, bulletinId])
+  @@index([bulletinId])
+  @@map("bulletin_collection_members")
 }
 
 /// Single-use tokens for email verification / password reset (Spec §38, §40).

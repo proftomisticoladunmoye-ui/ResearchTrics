@@ -7,6 +7,7 @@ import {
   suggestedCitation,
   listCitedBy,
   relatedBulletins,
+  getCollectionsForBulletin,
   authorSlug,
   seriesConfig,
   BULLETIN_TYPE_LABELS,
@@ -96,7 +97,11 @@ export default async function BulletinPage({ params }: { params: Promise<{ slug:
 
   void incrementBulletinView(b.id); // fire-and-forget
 
-  const [citedBy, related] = await Promise.all([listCitedBy(b.id), relatedBulletins(b.id, 5)]);
+  const [citedBy, related, partOf] = await Promise.all([
+    listCitedBy(b.id),
+    relatedBulletins(b.id, 5),
+    getCollectionsForBulletin(b.id),
+  ]);
   const authors = Array.isArray(b.authors) ? (b.authors as unknown as BulletinAuthor[]) : [];
   const references = Array.isArray(b.references) ? (b.references as unknown as BulletinReference[]) : [];
   const url = `${appUrl}/research-bulletin/${b.slug}`;
@@ -157,6 +162,20 @@ export default async function BulletinPage({ params }: { params: Promise<{ slug:
         {b.publicationDate ? b.publicationDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}
         {' · '}Published by {SERIES_PUBLISHER}
       </p>
+
+      {partOf.length > 0 ? (
+        <p className="mt-3 text-sm text-rt-muted">
+          Part of:{' '}
+          {partOf.map((c, i) => (
+            <span key={c.slug}>
+              {i > 0 ? ', ' : ''}
+              <Link href={`/research-bulletin/collections/${c.slug}`} className="text-rt-blue hover:underline">
+                {c.title}
+              </Link>
+            </span>
+          ))}
+        </p>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <a

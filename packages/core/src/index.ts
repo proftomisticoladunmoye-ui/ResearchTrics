@@ -40,6 +40,7 @@ export * from './openalex-works';
 export * from './citation-refresh';
 export * from './doi-minting';
 export * from './bulletin';
+export * from './bulletin-collection';
 export * from './zenodo';
 export * from './html-sanitize';
 export * from './docx-import';

@@ -1413,6 +1413,20 @@ async function main() {
     const cited = await core.mostCitedBulletins(5);
     check('most-cited ranks the foundational bulletin by internal citations', cited.some((c) => c.bulletin.slug === published.slug && c.citations >= 1));
 
+    // Phase 3b: collections & series.
+    const coll = await core.createCollection({ title: 'Advanced Psychometrics Series', kind: 'series', description: 'An ordered curriculum.' });
+    await core.setCollectionMembers(coll.id, [citer2.id, pub!.id]); // deliberately reversed to test ordering
+    const detail = await core.getCollectionBySlug(coll.slug);
+    check('collection returns its published members in the set order', !!detail && detail.bulletins[0]!.slug === citer2.slug && detail.bulletins[1]!.slug === published.slug);
+    check('collection kind + count are reported', detail!.kind === 'series' && detail!.count === 2);
+    const forBulletin = await core.getCollectionsForBulletin(pub!.id);
+    check('bulletin knows which collections it belongs to', forBulletin.some((c) => c.slug === coll.slug));
+    // Unpublished collections are hidden from the public getter.
+    await core.updateCollection(coll.id, { published: false });
+    check('an unpublished collection is not publicly retrievable', (await core.getCollectionBySlug(coll.slug)) === null);
+    await core.updateCollection(coll.id, { published: true });
+    check('collection appears in the public list', (await core.listCollections()).some((c) => c.slug === coll.slug));
+
     console.log('\nImpact report (§premium)');
     const reportDeep = await core.buildImpactReport(reg.researcher.id, { deep: true });
     check(

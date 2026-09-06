@@ -37,6 +37,21 @@ export default async function AdminOverviewPage() {
       </Card>
 
       <Card className="mt-6 p-6">
+        <h2 className="text-base font-semibold text-rt-text">Research Bulletin</h2>
+        <p className="mt-1 text-sm text-rt-muted">
+          Publish scholarly bulletins (write or import from Word), mint DOIs, group into collections, and moderate discussion.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button asChild size="sm">
+            <Link href="/admin/research-bulletin/new">+ New bulletin</Link>
+          </Button>
+          <Button asChild size="sm" variant="secondary">
+            <Link href="/admin/research-bulletin">Manage bulletins</Link>
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="mt-6 p-6">
         <h2 className="text-base font-semibold text-rt-text">Blog</h2>
         <p className="mt-1 text-sm text-rt-muted">Author and manage blog posts shown on the public site.</p>
         <div className="mt-4">

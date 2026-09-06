@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@researchtrics/db';
-import { probeObjectStorage } from '@researchtrics/core';
+import { probeObjectStorage, bulletinDoiProvider, bulletinCommentsEnabled } from '@researchtrics/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +26,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     } catch (err) {
       checks.storage = { ok: false, detail: (err as Error).message.slice(0, 200) };
     }
+  }
+  // `?doi=1` reports which DOI backend is configured (no secrets) so bulletin
+  // DOI minting can be verified without a real mint.
+  if (req.nextUrl.searchParams.get('doi') === '1') {
+    checks.doi = { provider: bulletinDoiProvider() ?? 'none', comments: bulletinCommentsEnabled() };
   }
 
   const storageOk = !checks.storage || (checks.storage as { ok?: boolean }).ok !== false;

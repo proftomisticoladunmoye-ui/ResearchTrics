@@ -8,6 +8,8 @@ import {
   listCitedBy,
   relatedBulletins,
   getCollectionsForBulletin,
+  listApprovedComments,
+  bulletinCommentsEnabled,
   authorSlug,
   seriesConfig,
   BULLETIN_TYPE_LABELS,
@@ -21,6 +23,7 @@ import {
 import { Badge } from '@researchtrics/ui';
 import { ShareButton } from '@/components/share-button';
 import { BulletinCitations } from '@/components/bulletin-citations';
+import { BulletinDiscussion } from '@/components/bulletin-discussion';
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.researchtrics.com';
 
@@ -97,10 +100,12 @@ export default async function BulletinPage({ params }: { params: Promise<{ slug:
 
   void incrementBulletinView(b.id); // fire-and-forget
 
-  const [citedBy, related, partOf] = await Promise.all([
+  const commentsOn = bulletinCommentsEnabled();
+  const [citedBy, related, partOf, comments] = await Promise.all([
     listCitedBy(b.id),
     relatedBulletins(b.id, 5),
     getCollectionsForBulletin(b.id),
+    commentsOn ? listApprovedComments(b.id) : Promise.resolve([]),
   ]);
   const authors = Array.isArray(b.authors) ? (b.authors as unknown as BulletinAuthor[]) : [];
   const references = Array.isArray(b.references) ? (b.references as unknown as BulletinReference[]) : [];
@@ -228,6 +233,20 @@ export default async function BulletinPage({ params }: { params: Promise<{ slug:
       {related.length > 0 ? <BulletinRefList heading="Related Research Bulletins" items={related} /> : null}
 
       <BulletinCitations slug={b.slug} suggested={citation} year={year} />
+
+      {commentsOn ? (
+        <BulletinDiscussion
+          slug={b.slug}
+          approved={comments.map((c) => ({
+            id: c.id,
+            authorName: c.authorName,
+            authorAffiliation: c.authorAffiliation,
+            authorOrcid: c.authorOrcid,
+            body: c.body,
+            createdAt: c.createdAt.toISOString(),
+          }))}
+        />
+      ) : null}
 
       <footer className="mt-10 border-t border-rt-border pt-4 text-xs text-rt-muted">
         <p>

@@ -1427,6 +1427,29 @@ async function main() {
     await core.updateCollection(coll.id, { published: true });
     check('collection appears in the public list', (await core.listCollections()).some((c) => c.slug === coll.slug));
 
+    // Moderated scholarly discussion (§35).
+    const submitted = await core.submitBulletinComment(pub!.id, {
+      authorName: 'Dr Reviewer',
+      authorEmail: 'reviewer@example.org',
+      authorAffiliation: 'Example University',
+      authorOrcid: '0000-0002-1825-0097',
+      body: '<b>Great primer.</b> One question: how do you handle partial invariance in practice?',
+    });
+    check('a submitted comment starts pending (not public)', submitted.status === 'pending' && (await core.listApprovedComments(pub!.id)).length === 0);
+    const storedComment = await prisma.bulletinComment.findUnique({ where: { id: submitted.id }, select: { body: true } });
+    check('comment body is stored as plain text (HTML stripped)', !storedComment!.body.includes('<b>') && storedComment!.body.includes('Great primer'));
+    let badComment = false;
+    await core.submitBulletinComment(pub!.id, { authorName: 'X', authorEmail: 'bad', body: 'hi' }).catch(() => { badComment = true; });
+    check('invalid comment (bad email / too short) is rejected', badComment);
+    const pendingList = await core.listCommentsForModeration('pending');
+    check('moderation queue lists the pending comment with email (admin view)', pendingList.some((c) => c.id === submitted.id && c.authorEmail === 'reviewer@example.org'));
+    await core.moderateBulletinComment(submitted.id, 'approved');
+    const publicComments = await core.listApprovedComments(pub!.id);
+    check('approved comment becomes public', publicComments.some((c) => c.id === submitted.id));
+    check('public comment view never exposes the email', !Object.prototype.hasOwnProperty.call(publicComments[0]!, 'authorEmail'));
+    await core.moderateBulletinComment(submitted.id, 'rejected');
+    check('rejecting an approved comment hides it again', (await core.listApprovedComments(pub!.id)).length === 0);
+
     console.log('\nImpact report (§premium)');
     const reportDeep = await core.buildImpactReport(reg.researcher.id, { deep: true });
     check(

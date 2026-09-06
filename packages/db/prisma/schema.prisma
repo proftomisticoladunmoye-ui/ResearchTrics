@@ -704,6 +704,7 @@ model ResearchBulletin {
   citesOut   BulletinCitation[] @relation("Citing")
   citedBy    BulletinCitation[] @relation("Cited")
   collections BulletinCollectionMember[]
+  comments    BulletinComment[]
 
   @@index([status, publicationDate])
   @@index([type])
@@ -731,6 +732,34 @@ model BulletinCitation {
 enum BulletinCollectionKind {
   collection
   series
+}
+
+enum BulletinCommentStatus {
+  pending
+  approved
+  rejected
+}
+
+/// Moderated scholarly discussion on a bulletin (§35). Nothing is shown publicly
+/// until an admin approves it. Email is collected for moderation/contact and is
+/// NEVER exposed publicly.
+model BulletinComment {
+  id                String                @id @default(uuid())
+  bulletinId        String                @map("bulletin_id")
+  authorName        String                @map("author_name")
+  authorEmail       String                @map("author_email")
+  authorAffiliation String?               @map("author_affiliation")
+  authorOrcid       String?               @map("author_orcid")
+  body              String
+  status            BulletinCommentStatus @default(pending)
+  createdAt         DateTime              @default(now()) @map("created_at")
+  approvedAt        DateTime?             @map("approved_at")
+
+  bulletin ResearchBulletin @relation(fields: [bulletinId], references: [id], onDelete: Cascade)
+
+  @@index([bulletinId, status])
+  @@index([status])
+  @@map("bulletin_comments")
 }
 
 /// A curated grouping of Research Bulletins — a thematic `collection` (unordered)

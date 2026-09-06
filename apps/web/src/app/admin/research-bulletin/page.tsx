@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Card, Badge, Button } from '@researchtrics/ui';
-import { listAllBulletins, BULLETIN_TYPE_LABELS } from '@researchtrics/core';
+import { listAllBulletins, countPendingComments, BULLETIN_TYPE_LABELS } from '@researchtrics/core';
 import { requireAdmin } from '@/lib/admin';
 
 export const metadata: Metadata = { title: 'Research Bulletin — Admin', robots: { index: false, follow: false } };
@@ -21,7 +21,7 @@ const STATUS_VARIANT: Record<string, 'success' | 'neutral' | 'gold' | 'outline'>
 
 export default async function AdminBulletinsPage() {
   await requireAdmin();
-  const bulletins = await listAllBulletins();
+  const [bulletins, pendingComments] = await Promise.all([listAllBulletins(), countPendingComments()]);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-12">
@@ -35,6 +35,9 @@ export default async function AdminBulletinsPage() {
         </div>
         <div className="flex items-center gap-3">
           <Link href="/admin/research-bulletin/collections" className="text-sm text-rt-blue hover:underline">Collections</Link>
+          <Link href="/admin/research-bulletin/comments" className="text-sm text-rt-blue hover:underline">
+            Comments{pendingComments > 0 ? ` (${pendingComments})` : ''}
+          </Link>
           <Link href="/admin/research-bulletin/analytics" className="text-sm text-rt-blue hover:underline">Analytics</Link>
           <Button asChild size="sm">
             <Link href="/admin/research-bulletin/new">+ New bulletin</Link>

@@ -149,6 +149,8 @@ export const RATE_LIMITS = {
   assistant: { limit: 30, windowMs: 10 * 60_000 },
   /** Resend of the email-verification link per user — prevents inbox spam. */
   'resend-verification': { limit: 5, windowMs: 60 * 60_000 },
+  /** Public bulletin comment submissions per IP — moderation is the real gate. */
+  'bulletin-comment': { limit: 10, windowMs: 60 * 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

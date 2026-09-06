@@ -3,6 +3,8 @@ import Link from 'next/link';
 import {
   listPublishedBulletins,
   listBulletinCategories,
+  mostViewedBulletins,
+  mostCitedBulletins,
   BULLETIN_TYPES,
   BULLETIN_TYPE_LABELS,
   SERIES_NAME,
@@ -45,9 +47,12 @@ export default async function BulletinHubPage({
   const query = sp.q?.trim() || undefined;
   const category = sp.category?.trim() || undefined;
 
-  const [{ items, total }, categories] = await Promise.all([
+  const browsing = !query && !type && !category;
+  const [{ items, total }, categories, mostRead, mostCited] = await Promise.all([
     listPublishedBulletins({ query, type, category, take: 50 }),
     listBulletinCategories(),
+    browsing ? mostViewedBulletins(5) : Promise.resolve([]),
+    browsing ? mostCitedBulletins(5) : Promise.resolve([]),
   ]);
 
   return (
@@ -95,6 +100,40 @@ export default async function BulletinHubPage({
         ) : null}
         <button type="submit" className="rounded-lg bg-rt-blue px-4 py-2 text-sm font-medium text-white">Filter</button>
       </form>
+
+      {browsing && (mostRead.length > 0 || mostCited.length > 0) ? (
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          {mostRead.length > 0 ? (
+            <Card className="p-4">
+              <h2 className="text-sm font-semibold text-rt-text">Most read</h2>
+              <ol className="mt-2 space-y-1 text-sm">
+                {mostRead.map((b) => (
+                  <li key={b.slug} className="truncate">
+                    <Link href={`/research-bulletin/${b.slug}`} className="text-rt-blue hover:underline">
+                      No. {num(b.number)} · {b.title}
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+            </Card>
+          ) : null}
+          {mostCited.length > 0 ? (
+            <Card className="p-4">
+              <h2 className="text-sm font-semibold text-rt-text">Most cited</h2>
+              <ol className="mt-2 space-y-1 text-sm">
+                {mostCited.map((c) => (
+                  <li key={c.bulletin.slug} className="flex justify-between gap-2">
+                    <Link href={`/research-bulletin/${c.bulletin.slug}`} className="min-w-0 truncate text-rt-blue hover:underline">
+                      No. {num(c.bulletin.number)} · {c.bulletin.title}
+                    </Link>
+                    <span className="shrink-0 text-xs text-rt-muted">{c.citations}×</span>
+                  </li>
+                ))}
+              </ol>
+            </Card>
+          ) : null}
+        </div>
+      ) : null}
 
       <p className="mt-4 text-xs text-rt-muted">{total} bulletin{total === 1 ? '' : 's'}</p>
 

@@ -1389,6 +1389,30 @@ async function main() {
     delete process.env.ZENODO_TOKEN;
     delete process.env.ZENODO_ENVIRONMENT;
 
+    // Phase 5: analytics & citation intelligence.
+    const analytics = await core.getBulletinAnalytics();
+    check('analytics reports published totals + view/download sums', analytics.totals.published >= 1 && analytics.totals.downloads >= 1);
+    check('analytics counts a bulletin with a DOI', analytics.totals.withDoi >= 1);
+    check('analytics groups by category', analytics.byCategory.some((c) => c.category === 'Psychometrics'));
+    check('most-viewed list returns published bulletins', (await core.mostViewedBulletins(5)).length >= 1);
+    // `published` (No.1) was cited by `citing` earlier, then the link was pruned;
+    // re-add a citing bulletin to assert most-cited ranking.
+    const citer2 = await core.createBulletin(
+      {
+        title: 'Second Applied Follow-up on Invariance',
+        type: 'psychometric', category: 'Psychometrics',
+        abstract: 'A second applied follow-up that again builds on the foundational invariance primer, cited here to exercise the citation-ranking analytics with sufficiently detailed background material.',
+        keywords: ['measurement invariance'],
+        bodyHtml: `<h2>Background</h2><p>Building once more on <a href="/research-bulletin/${published.slug}">the invariance primer</a>, this bulletin provides an additional worked example with enough narrative to comfortably exceed the readiness content threshold required before a bulletin in the series may be published.</p>`,
+        authors: [{ name: 'Oladunmoye, E. O.', order: 0 }],
+        references: [{ raw: 'Author, A. (2025). More invariance. J. Testing, 3(1), 1–9.' }],
+      },
+      reg.user.id,
+    );
+    await core.publishBulletin(citer2.id);
+    const cited = await core.mostCitedBulletins(5);
+    check('most-cited ranks the foundational bulletin by internal citations', cited.some((c) => c.bulletin.slug === published.slug && c.citations >= 1));
+
     console.log('\nImpact report (§premium)');
     const reportDeep = await core.buildImpactReport(reg.researcher.id, { deep: true });
     check(

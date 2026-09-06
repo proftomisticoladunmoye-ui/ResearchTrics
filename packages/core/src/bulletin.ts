@@ -253,6 +253,7 @@ export interface BulletinListItem {
   featuredImage: string | null;
   publicationDate: Date | null;
   viewCount: number;
+  downloadCount: number;
   authors: BulletinAuthor[];
 }
 
@@ -269,6 +270,7 @@ function toListItem(b: BulletinDetail): BulletinListItem {
     featuredImage: b.featuredImage,
     publicationDate: b.publicationDate,
     viewCount: b.viewCount,
+    downloadCount: b.downloadCount,
     authors: Array.isArray(b.authors) ? (b.authors as unknown as BulletinAuthor[]) : [],
   };
 }
@@ -510,6 +512,105 @@ export async function getBulletinAuthorProfile(slug: string, client: PrismaClien
   }
   if (bulletins.length === 0) return null;
   return { name, slug, affiliation, orcid, bulletins };
+}
+
+// --- Analytics & citation intelligence (§31, §32, §51) ----------------------
+
+/** Most-viewed published bulletins (also used on the public hub). */
+export async function mostViewedBulletins(limit = 5, client: PrismaClient = prisma): Promise<BulletinListItem[]> {
+  const rows = await client.researchBulletin.findMany({
+    where: { status: 'published' },
+    orderBy: [{ viewCount: 'desc' }, { publicationDate: 'desc' }],
+    take: limit,
+  });
+  return rows.map(toListItem);
+}
+
+export interface CitedBulletin {
+  bulletin: BulletinListItem;
+  citations: number;
+}
+
+/**
+ * Most-cited published bulletins by INTERNAL (on-platform, verified) citation
+ * count. External DOI citations are a later enhancement once bulletins carry
+ * DOIs; internal and external counts are kept distinct (§32) and never merged.
+ */
+export async function mostCitedBulletins(limit = 5, client: PrismaClient = prisma): Promise<CitedBulletin[]> {
+  const grouped = await client.bulletinCitation.groupBy({
+    by: ['citedId'],
+    where: { citing: { status: 'published' }, cited: { status: 'published' } },
+    _count: { citedId: true },
+    orderBy: { _count: { citedId: 'desc' } },
+    take: limit,
+  });
+  if (grouped.length === 0) return [];
+  const byId = new Map(grouped.map((g) => [g.citedId, g._count.citedId]));
+  const rows = await client.researchBulletin.findMany({ where: { id: { in: [...byId.keys()] } } });
+  return rows
+    .map((r) => ({ bulletin: toListItem(r), citations: byId.get(r.id) ?? 0 }))
+    .sort((a, b) => b.citations - a.citations);
+}
+
+export interface BulletinAnalytics {
+  totals: {
+    published: number;
+    drafts: number;
+    inReview: number;
+    scheduled: number;
+    archived: number;
+    views: number;
+    downloads: number;
+    internalCitations: number;
+    withDoi: number;
+  };
+  byCategory: Array<{ category: string; count: number }>;
+  byType: Array<{ type: BulletinType; count: number }>;
+  mostViewed: BulletinListItem[];
+  mostDownloaded: BulletinListItem[];
+  mostCited: CitedBulletin[];
+  recent: BulletinListItem[];
+}
+
+/** Aggregate publication + citation analytics for the admin dashboard (§51). */
+export async function getBulletinAnalytics(client: PrismaClient = prisma): Promise<BulletinAnalytics> {
+  const [byStatus, sums, internalCitations, withDoi, byCategoryRaw, byTypeRaw, mostDownloadedRows, mostViewed, mostCited, recentRows] =
+    await Promise.all([
+      client.researchBulletin.groupBy({ by: ['status'], _count: { status: true } }),
+      client.researchBulletin.aggregate({ where: { status: 'published' }, _sum: { viewCount: true, downloadCount: true } }),
+      client.bulletinCitation.count({ where: { citing: { status: 'published' }, cited: { status: 'published' } } }),
+      client.researchBulletin.count({ where: { status: 'published', doi: { not: null } } }),
+      client.researchBulletin.groupBy({ by: ['category'], where: { status: 'published' }, _count: { category: true } }),
+      client.researchBulletin.groupBy({ by: ['type'], where: { status: 'published' }, _count: { type: true } }),
+      client.researchBulletin.findMany({ where: { status: 'published' }, orderBy: { downloadCount: 'desc' }, take: 5 }),
+      mostViewedBulletins(5, client),
+      mostCitedBulletins(5, client),
+      client.researchBulletin.findMany({ where: { status: 'published' }, orderBy: { publicationDate: 'desc' }, take: 5 }),
+    ]);
+
+  const statusCount = (s: BulletinStatus): number => byStatus.find((r) => r.status === s)?._count.status ?? 0;
+
+  return {
+    totals: {
+      published: statusCount('published'),
+      drafts: statusCount('draft'),
+      inReview: statusCount('in_review'),
+      scheduled: statusCount('scheduled'),
+      archived: statusCount('archived'),
+      views: sums._sum.viewCount ?? 0,
+      downloads: sums._sum.downloadCount ?? 0,
+      internalCitations,
+      withDoi,
+    },
+    byCategory: byCategoryRaw
+      .map((r) => ({ category: r.category, count: r._count.category }))
+      .sort((a, b) => b.count - a.count),
+    byType: byTypeRaw.map((r) => ({ type: r.type, count: r._count.type })).sort((a, b) => b.count - a.count),
+    mostViewed,
+    mostDownloaded: mostDownloadedRows.map(toListItem),
+    mostCited,
+    recent: recentRows.map(toListItem),
+  };
 }
 
 // --- Scholarly infrastructure: series config + DOI (§20, §21, §50) ----------

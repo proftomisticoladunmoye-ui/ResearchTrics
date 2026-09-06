@@ -33,9 +33,12 @@ export default async function AdminBulletinsPage() {
             assigned at first publish.
           </p>
         </div>
-        <Button asChild size="sm">
-          <Link href="/admin/research-bulletin/new">+ New bulletin</Link>
-        </Button>
+        <div className="flex items-center gap-3">
+          <Link href="/admin/research-bulletin/analytics" className="text-sm text-rt-blue hover:underline">Analytics</Link>
+          <Button asChild size="sm">
+            <Link href="/admin/research-bulletin/new">+ New bulletin</Link>
+          </Button>
+        </div>
       </div>
 
       <Card className="mt-6 p-0">

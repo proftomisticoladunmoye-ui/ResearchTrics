@@ -16,6 +16,21 @@ describe('processImportedHtml', () => {
     expect(r.report.warnings.some((w) => /title/i.test(w))).toBe(true);
   });
 
+  it('does NOT lift a section heading like "Abstract" as the title', () => {
+    const r = processImportedHtml('<h2>Abstract</h2><p>The abstract text.</p><h2>Introduction</h2><p>…</p>');
+    expect(r.title).toBe('');
+    expect(r.report.titleDetected).toBe(false);
+    expect(r.report.warnings.some((w) => /section/i.test(w))).toBe(true);
+    // The Abstract heading stays in the body (not consumed as a title).
+    expect(r.bodyHtml).toContain('Abstract');
+  });
+
+  it('lifts a genuine title heading', () => {
+    const r = processImportedHtml('<h1>Defining Research Visibility</h1><h2>Abstract</h2><p>…</p>');
+    expect(r.title).toBe('Defining Research Visibility');
+    expect(r.report.titleDetected).toBe(true);
+  });
+
   it('converts a YouTube link into an embed iframe', () => {
     const r = processImportedHtml('<h2>T</h2><p><a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">video</a></p>');
     expect(r.report.youtube).toBe(1);

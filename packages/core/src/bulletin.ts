@@ -292,6 +292,8 @@ export async function listPublishedBulletins(
             { title: { contains: params.query, mode: 'insensitive' } },
             { abstract: { contains: params.query, mode: 'insensitive' } },
             { keywords: { has: params.query } },
+            // Full-text: also match the bulletin body (§28).
+            { bodyHtml: { contains: params.query, mode: 'insensitive' } },
           ],
         }
       : {}),

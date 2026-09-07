@@ -1334,6 +1334,9 @@ async function main() {
     check('re-publishing preserves the original number', republished.number === published.number);
     const slugs = await core.listPublishedBulletinSlugs();
     check('published bulletin appears in the sitemap source', slugs.some((s) => s.slug === published.slug));
+    // Full-text search matches a term that appears ONLY in the body.
+    const bodyHit = await core.listPublishedBulletins({ query: 'nested steps', take: 10 });
+    check('full-text search finds a body-only phrase', bodyHit.items.some((b) => b.slug === published.slug));
     // Phase 2: PDF generation from the canonical content.
     const pdf = await core.renderBulletinPdf(pub!, 'https://www.researchtrics.com');
     check('bulletin PDF renders as a valid PDF buffer', Buffer.isBuffer(pdf) && pdf.length > 500 && pdf.subarray(0, 5).toString() === '%PDF-');

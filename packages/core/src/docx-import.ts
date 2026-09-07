@@ -39,6 +39,10 @@ export interface DocxImportResult {
 
 const YT_RE = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{6,})/i;
 
+/** Common scholarly section labels — never valid as a bulletin title. */
+const SECTION_HEADING =
+  /^(abstract|introduction|background|keywords?|methods?|methodology|materials(?:\s+and\s+methods)?|results|discussion|conclusions?|references?|bibliography|works cited|acknowledge?ments?|appendix|appendices|table of contents|contents|summary|highlights|limitations|implications|recommendations|literature review)\b/i;
+
 function youtubeId(url: string): string | null {
   const m = url.match(YT_RE);
   return m ? m[1]! : null;
@@ -67,6 +71,12 @@ export async function importDocx(
   const { value: rawHtml, messages } = await mammoth.convertToHtml(
     { buffer },
     {
+      // Map Word's Title/Subtitle styles to real headings so the paper title is
+      // detectable (Word's Title style otherwise becomes a plain paragraph).
+      styleMap: [
+        "p[style-name='Title'] => h1:fresh",
+        "p[style-name='Subtitle'] => h2.rt-subtitle:fresh",
+      ],
       convertImage: mammoth.images.imgElement(async (image) => {
         const contentType = (image.contentType || 'application/octet-stream').toLowerCase();
         if (!WEB_IMAGE.test(contentType)) {
@@ -120,14 +130,24 @@ export function processImportedHtml(
   const imagesUnconvertible = extra.imagesUnconvertible ?? 0;
   const root = parseHtml(rawHtml);
 
-  // Title = first heading (h1 preferred, else h2); removed from the body.
+  // Title = the first heading — but ONLY if it isn't a standard section label
+  // (Abstract, Introduction, References, …). A scholarly Word doc often has its
+  // title as plain text and "Abstract"/"Introduction" as the first real heading;
+  // lifting that as the title is wrong, so we skip it and ask for a manual title
+  // rather than guessing.
   let title = '';
   const firstHeading = root.querySelector('h1') ?? root.querySelector('h2');
-  if (firstHeading) {
+  if (firstHeading && !SECTION_HEADING.test(firstHeading.text.trim())) {
     title = firstHeading.text.trim();
     firstHeading.remove();
   }
-  if (!title) warnings.push('No title heading detected — set the title manually.');
+  if (!title) {
+    warnings.push(
+      firstHeading
+        ? `Title not set — the first heading ("${firstHeading.text.trim().slice(0, 40)}") looks like a section, not a title. Enter the title manually.`
+        : 'No title heading detected — set the title manually.',
+    );
+  }
 
   // Drop unconvertible-image markers (empty src emitted for EMF/WMF etc.).
   for (const img of root.querySelectorAll('img')) {

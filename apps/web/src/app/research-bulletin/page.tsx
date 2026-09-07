@@ -78,7 +78,7 @@ export default async function BulletinHubPage({
           <input
             name="q"
             defaultValue={query ?? ''}
-            placeholder="Title, abstract, keyword…"
+            placeholder="Title, abstract, keyword, or full text…"
             className="w-full rounded-lg border border-rt-border bg-rt-white px-3 py-2 text-sm text-rt-text"
           />
         </label>

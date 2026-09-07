@@ -113,18 +113,40 @@ export function BulletinEditor({ initial }: { initial?: BulletinInitial }) {
       fd.append('file', file);
       const res = await fetch('/api/v1/admin/research-bulletin/import', { method: 'POST', body: fd });
       const body = (await res.json().catch(() => ({}))) as {
-        data?: { title: string; bodyHtml: string; report: Record<string, unknown> };
+        data?: {
+          title: string;
+          subtitle?: string;
+          authors?: Array<{ name: string; affiliation?: string }>;
+          abstract?: string;
+          keywords?: string[];
+          references?: Array<{ raw: string; doi?: string }>;
+          bodyHtml: string;
+          report: Record<string, unknown>;
+        };
         error?: { message?: string };
       };
       if (!res.ok || !body.data) {
         setMsg({ kind: 'error', text: body.error?.message ?? 'Import failed.' });
         return;
       }
-      set({ ...(body.data.title ? { title: body.data.title } : {}), bodyHtml: body.data.bodyHtml });
-      setReport(body.data.report);
-      // Prompt for a manual title when the importer couldn't detect one.
-      setTitleMissing(body.data.report?.titleDetected === false);
-      setMsg({ kind: 'success', text: 'Word document imported. Review the report and edit before publishing.' });
+      const d = body.data;
+      // Auto-fill every field the importer extracted, into its own box.
+      set({
+        ...(d.title ? { title: d.title } : {}),
+        ...(d.subtitle ? { subtitle: d.subtitle } : {}),
+        ...(d.abstract ? { abstract: d.abstract } : {}),
+        ...(d.keywords && d.keywords.length ? { keywords: d.keywords.join(', ') } : {}),
+        ...(d.authors && d.authors.length
+          ? { authors: d.authors.map((a) => ({ name: a.name, affiliation: a.affiliation ?? '', orcid: '' })) }
+          : {}),
+        ...(d.references && d.references.length
+          ? { references: d.references.map((r) => ({ raw: r.raw, doi: r.doi ?? '' })) }
+          : {}),
+        bodyHtml: d.bodyHtml,
+      });
+      setReport(d.report);
+      setTitleMissing(d.report?.titleDetected === false);
+      setMsg({ kind: 'success', text: 'Word document imported — title, authors, abstract, keywords, references and body were auto-filled. Review the report and edit anything before publishing.' });
     } catch {
       setMsg({ kind: 'error', text: 'Network error during import.' });
     } finally {
@@ -222,9 +244,10 @@ export function BulletinEditor({ initial }: { initial?: BulletinInitial }) {
             <p className="font-semibold">Import report</p>
             <ul className="mt-1 space-y-0.5">
               <li>{report.titleDetected ? '✓' : '⚠'} Title {report.titleDetected ? 'detected' : 'not detected — set it manually'}</li>
-              <li>✓ {String(report.headings)} headings · {String(report.paragraphs)} paragraphs</li>
+              <li>{Number(report.authorsDetected) > 0 ? '✓' : '⚠'} {String(report.authorsDetected)} author(s) · {report.abstractDetected ? '✓ abstract' : '⚠ no abstract'} · {String(report.keywordsDetected)} keywords</li>
+              <li>✓ {String(report.headings)} headings · {String(report.paragraphs)} paragraphs · {String(report.references)} references</li>
               <li>✓ {String(report.tables)} tables · {String(report.imagesUploaded)} images imported{Number(report.imagesUnconvertible) > 0 ? ` · ${String(report.imagesUnconvertible)} diagram(s) not web-displayable` : ''}</li>
-              <li>✓ {String(report.links)} links · {String(report.youtube)} YouTube embeds · {String(report.references)} references detected</li>
+              <li>✓ {String(report.links)} links · {String(report.youtube)} YouTube embeds</li>
             </ul>
             {Array.isArray(report.warnings) && report.warnings.length > 0 ? (
               <ul className="mt-2 space-y-0.5 text-rt-error">

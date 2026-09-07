@@ -22,13 +22,15 @@ export interface CollectionInput {
 function shape(b: {
   number: number | null; slug: string; title: string; subtitle: string | null;
   type: unknown; category: string; abstract: string; keywords: string[];
-  featuredImage: string | null; publicationDate: Date | null; viewCount: number; downloadCount: number; authors: unknown;
+  featuredImage: string | null; publicationDate: Date | null; viewCount: number; downloadCount: number;
+  shareCount: number; authors: unknown; _count?: { citedBy?: number };
 }): BulletinListItem {
   return {
     number: b.number, slug: b.slug, title: b.title, subtitle: b.subtitle,
     type: b.type as BulletinListItem['type'], category: b.category, abstract: b.abstract,
     keywords: b.keywords, featuredImage: b.featuredImage, publicationDate: b.publicationDate,
-    viewCount: b.viewCount, downloadCount: b.downloadCount,
+    viewCount: b.viewCount, downloadCount: b.downloadCount, shareCount: b.shareCount,
+    citationCount: b._count?.citedBy,
     authors: Array.isArray(b.authors) ? (b.authors as BulletinListItem['authors']) : [],
   };
 }
@@ -123,7 +125,7 @@ export async function getCollectionBySlug(slug: string, client: PrismaClient = p
       members: {
         where: { bulletin: { status: 'published' } },
         orderBy: { order: 'asc' },
-        include: { bulletin: true },
+        include: { bulletin: { include: { _count: { select: { citedBy: true } } } } },
       },
     },
   });

@@ -57,6 +57,14 @@ export default async function AdminBulletinsPage() {
                     {b.number != null ? `No. ${String(b.number).padStart(3, '0')} · ` : ''}{b.title}
                   </Link>
                   <p className="text-xs text-rt-muted">{BULLETIN_TYPE_LABELS[b.type]} · Updated {fmt(b.updatedAt)}</p>
+                  {b.status === 'published' ? (
+                    <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-rt-muted" aria-label="Metrics">
+                      <span title="Views">👁 {b.viewCount.toLocaleString()}</span>
+                      <span title="Reads (PDF downloads)">⬇ {b.downloadCount.toLocaleString()}</span>
+                      <span title="Shares">↗ {b.shareCount.toLocaleString()}</span>
+                      <span title="Citations (internal)">❝ {b.citationCount.toLocaleString()}</span>
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant={STATUS_VARIANT[b.status] ?? 'neutral'}>{b.status.replace('_', ' ')}</Badge>

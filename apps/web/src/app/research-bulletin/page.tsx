@@ -163,6 +163,12 @@ export default async function BulletinHubPage({
                     {b.publicationDate ? ` · ${b.publicationDate.getUTCFullYear()}` : ''}
                     {` · ${b.category}`}
                   </p>
+                  <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-rt-muted" aria-label="Bulletin metrics">
+                    <span title="Views">👁 {b.viewCount.toLocaleString()}</span>
+                    <span title="Reads (PDF downloads)">⬇ {b.downloadCount.toLocaleString()}</span>
+                    <span title="Shares">↗ {b.shareCount.toLocaleString()}</span>
+                    <span title="Citations (internal)">❝ {(b.citationCount ?? 0).toLocaleString()}</span>
+                  </p>
                 </Card>
               </Link>
             </li>

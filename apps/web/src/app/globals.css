@@ -38,6 +38,121 @@
   }
 }
 
+/* Research Bulletin body — production-grade scholarly typography applied to
+   author/imported HTML automatically, so content is arranged and justified
+   without manual styling. */
+.rt-bulletin-body {
+  font-size: 1.05rem;
+  line-height: 1.75;
+  color: var(--rt-text);
+}
+.rt-bulletin-body > * + * {
+  margin-top: 1rem;
+}
+.rt-bulletin-body p {
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
+}
+.rt-bulletin-body h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 2rem;
+  color: var(--rt-blue);
+}
+.rt-bulletin-body h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  color: var(--rt-text);
+}
+.rt-bulletin-body h4,
+.rt-bulletin-body h5,
+.rt-bulletin-body h6 {
+  font-weight: 600;
+  margin-top: 1.25rem;
+}
+.rt-bulletin-body ul,
+.rt-bulletin-body ol {
+  padding-left: 1.5rem;
+}
+.rt-bulletin-body ul { list-style: disc; }
+.rt-bulletin-body ol { list-style: decimal; }
+.rt-bulletin-body li + li { margin-top: 0.25rem; }
+.rt-bulletin-body a {
+  color: var(--rt-blue-royal);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.rt-bulletin-body blockquote {
+  border-left: 3px solid var(--rt-gold);
+  padding-left: 1rem;
+  color: var(--rt-muted);
+  font-style: italic;
+}
+.rt-bulletin-body figure {
+  margin: 1.5rem 0;
+  text-align: center;
+}
+.rt-bulletin-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin-inline: auto;
+}
+.rt-bulletin-body figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--rt-muted);
+}
+/* Responsive 16:9 video embeds. */
+.rt-bulletin-body figure:has(> iframe) {
+  position: relative;
+  padding-bottom: 56.25%;
+  height: 0;
+}
+.rt-bulletin-body figure > iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 6px;
+}
+.rt-bulletin-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  display: block;
+  overflow-x: auto;
+}
+.rt-bulletin-body th,
+.rt-bulletin-body td {
+  border: 1px solid var(--rt-border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+.rt-bulletin-body th {
+  background: var(--rt-blue-light);
+  font-weight: 600;
+}
+.rt-bulletin-body pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+.rt-bulletin-body :not(pre) > code {
+  background: var(--rt-blue-light);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
 /* Print: strip the site chrome so reports export as clean PDFs. */
 @media print {
   header,

@@ -17,6 +17,9 @@ import { logger } from './logger';
 
 export interface DocxImportReport {
   titleDetected: boolean;
+  authorsDetected: number;
+  abstractDetected: boolean;
+  keywordsDetected: number;
   headings: number;
   paragraphs: number;
   tables: number;
@@ -31,8 +34,22 @@ export interface DocxImportReport {
   warnings: string[];
 }
 
+export interface ImportedAuthor {
+  name: string;
+  affiliation?: string;
+}
+export interface ImportedReference {
+  raw: string;
+  doi?: string;
+}
+
 export interface DocxImportResult {
   title: string;
+  subtitle: string;
+  authors: ImportedAuthor[];
+  abstract: string;
+  keywords: string[];
+  references: ImportedReference[];
   bodyHtml: string;
   report: DocxImportReport;
 }
@@ -149,6 +166,80 @@ export function processImportedHtml(
     );
   }
 
+  // --- Front matter: lift authors/affiliation/abstract/keywords/references into
+  // their own fields and OUT of the body, so the body is clean main content that
+  // arranges to production quality without manual editing. ---
+  const structured = !!findHeadingIn(root, /^(abstract|introduction|background)\b/i);
+
+  // Subtitle (Word "Subtitle" style → h2.rt-subtitle).
+  let subtitle = '';
+  const subEl = root.querySelector('.rt-subtitle');
+  if (subEl) {
+    subtitle = subEl.text.trim();
+    subEl.remove();
+  }
+
+  // Keywords line anywhere ("Keywords: a, b, c").
+  let keywords: string[] = [];
+  const kwEl = root.querySelectorAll('p').find((p) => /^\s*key\s?words?\b\s*[:.—-]/i.test(p.text));
+  if (kwEl) {
+    keywords = kwEl.text
+      .replace(/^\s*key\s?words?\b\s*[:.—-]?\s*/i, '')
+      .split(/[,;]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 30);
+    kwEl.remove();
+  }
+
+  // Authors + affiliation: the leading paragraph(s) before the first heading —
+  // only in a structured scholarly doc, so we never swallow body prose.
+  const authors: ImportedAuthor[] = [];
+  if (structured) {
+    const lead: HTMLElement[] = [];
+    for (const node of root.childNodes as unknown as HTMLElement[]) {
+      const tag = node.tagName?.toLowerCase();
+      if (!tag) continue; // text node
+      if (/^h[1-6]$/.test(tag)) break; // reached the first section heading
+      if (tag === 'p') {
+        if (node.text.trim()) lead.push(node);
+      } else break; // a table/figure/list before any heading → not front matter
+      if (lead.length >= 3) break;
+    }
+    if (lead.length) {
+      const parsed = parseAuthors(lead.map((p) => p.text.trim()));
+      if (parsed.length) {
+        authors.push(...parsed);
+        lead.forEach((p) => p.remove());
+      }
+    }
+    if (authors.length === 0) warnings.push('Authors not detected — add author name(s) and affiliation manually.');
+  }
+
+  // Abstract section.
+  let abstract = '';
+  const absH = findHeadingIn(root, /^abstract\b/i);
+  if (absH) {
+    const nodes = collectUntilNextHeading(absH);
+    abstract = nodes.map((n) => n.text.trim()).filter(Boolean).join('\n\n');
+    absH.remove();
+    nodes.forEach((n) => n.remove());
+  }
+
+  // References section → structured list with DOIs pulled out.
+  const references: ImportedReference[] = [];
+  const refH = findHeadingIn(root, /^(references|bibliography|works cited)\b/i);
+  if (refH) {
+    const nodes = collectUntilNextHeading(refH);
+    for (const n of nodes) {
+      const tag = n.tagName?.toLowerCase();
+      if (tag === 'ol' || tag === 'ul') n.querySelectorAll('li').forEach((li) => pushReference(references, li.text));
+      else pushReference(references, n.text);
+    }
+    refH.remove();
+    nodes.forEach((n) => n.remove());
+  }
+
   // Drop unconvertible-image markers (empty src emitted for EMF/WMF etc.).
   for (const img of root.querySelectorAll('img')) {
     if (!(img.getAttribute('src') ?? '').trim()) img.remove();
@@ -189,7 +280,6 @@ export function processImportedHtml(
   const tables = root.querySelectorAll('table').length;
   const images = root.querySelectorAll('img').length;
   const links = root.querySelectorAll('a').length;
-  const references = countReferences(root);
 
   if (imagesUnconvertible > 0) {
     warnings.push(
@@ -201,9 +291,17 @@ export function processImportedHtml(
 
   return {
     title,
+    subtitle,
+    authors,
+    abstract,
+    keywords,
+    references,
     bodyHtml,
     report: {
       titleDetected: title.length > 0,
+      authorsDetected: authors.length,
+      abstractDetected: abstract.length > 0,
+      keywordsDetected: keywords.length,
       headings,
       paragraphs,
       tables,
@@ -213,7 +311,7 @@ export function processImportedHtml(
       imagesUnconvertible,
       links,
       youtube,
-      references,
+      references: references.length,
       warnings,
     },
   };
@@ -234,20 +332,40 @@ function escapeText(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/** Best-effort reference count: list items or paragraphs after a References heading. */
-function countReferences(root: HTMLElement): number {
-  const headings = root.querySelectorAll('h1,h2,h3,h4,h5,h6');
-  const refHeading = headings.find((h) => /^(references|bibliography|works cited)\b/i.test(h.text.trim()));
-  if (!refHeading) return 0;
-  // Count list items in the first list after the heading, else paragraphs until the next heading.
-  let node = refHeading.nextElementSibling;
-  let count = 0;
-  while (node) {
-    const tag = node.tagName?.toLowerCase();
-    if (tag && /^h[1-6]$/.test(tag)) break;
-    if (tag === 'ol' || tag === 'ul') count += node.querySelectorAll('li').length;
-    else if (tag === 'p' && node.text.trim().length > 0) count += 1;
-    node = node.nextElementSibling;
+/** First heading (h1–h6) whose text matches `re`, or null. */
+function findHeadingIn(root: HTMLElement, re: RegExp): HTMLElement | null {
+  return root.querySelectorAll('h1,h2,h3,h4,h5,h6').find((h) => re.test(h.text.trim())) ?? null;
+}
+
+/** Sibling elements after `heading` up to (not including) the next heading. */
+function collectUntilNextHeading(heading: HTMLElement): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  let n = heading.nextElementSibling as HTMLElement | null;
+  while (n) {
+    if (n.tagName && /^h[1-6]$/.test(n.tagName.toLowerCase())) break;
+    out.push(n);
+    n = n.nextElementSibling as HTMLElement | null;
   }
-  return count;
+  return out;
+}
+
+/** Parse a byline into authors + a shared affiliation (best-effort). */
+function parseAuthors(lines: string[]): ImportedAuthor[] {
+  const first = lines[0] ?? '';
+  if (!first || first.length > 240) return []; // long → body prose, not a byline
+  const names = first
+    .split(/,| and |;|&|·/i)
+    .map((s) => s.replace(/[\d*†‡§¶#]+/g, '').replace(/\s+/g, ' ').trim())
+    .filter((n) => n.length >= 2 && n.length <= 80 && /[A-Za-z]/.test(n) && !/@/.test(n));
+  if (names.length === 0) return [];
+  const affiliation = lines.slice(1).join('; ').trim() || undefined;
+  return names.map((name) => ({ name, ...(affiliation ? { affiliation } : {}) }));
+}
+
+/** Add a reference (with any DOI extracted) if the text is substantive. */
+function pushReference(arr: ImportedReference[], raw: string): void {
+  const t = raw.replace(/\s+/g, ' ').trim();
+  if (t.length < 6) return;
+  const doi = (t.match(/\b10\.\d{4,9}\/[^\s"<>]+/i)?.[0] ?? '').replace(/[.,;)\]]+$/, '');
+  arr.push({ raw: t, ...(doi ? { doi } : {}) });
 }

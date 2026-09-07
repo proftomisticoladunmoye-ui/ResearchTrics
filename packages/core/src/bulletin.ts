@@ -254,10 +254,18 @@ export interface BulletinListItem {
   publicationDate: Date | null;
   viewCount: number;
   downloadCount: number;
+  /** Number of times this bulletin was shared (§31). */
+  shareCount: number;
+  /**
+   * Internal citations INTO this bulletin. Present only when the query included
+   * the `_count.citedBy` relation (hub, admin list); undefined otherwise so
+   * callers don't render a misleading 0.
+   */
+  citationCount?: number;
   authors: BulletinAuthor[];
 }
 
-function toListItem(b: BulletinDetail): BulletinListItem {
+function toListItem(b: BulletinDetail & { _count?: { citedBy?: number } }): BulletinListItem {
   return {
     number: b.number,
     slug: b.slug,
@@ -271,6 +279,8 @@ function toListItem(b: BulletinDetail): BulletinListItem {
     publicationDate: b.publicationDate,
     viewCount: b.viewCount,
     downloadCount: b.downloadCount,
+    shareCount: b.shareCount,
+    citationCount: b._count?.citedBy,
     authors: Array.isArray(b.authors) ? (b.authors as unknown as BulletinAuthor[]) : [],
   };
 }
@@ -299,15 +309,28 @@ export async function listPublishedBulletins(
       : {}),
   };
   const [rows, total] = await Promise.all([
-    client.researchBulletin.findMany({ where, orderBy: [{ publicationDate: 'desc' }, { number: 'desc' }], take, skip }),
+    client.researchBulletin.findMany({
+      where,
+      orderBy: [{ publicationDate: 'desc' }, { number: 'desc' }],
+      take,
+      skip,
+      include: { _count: { select: { citedBy: true } } },
+    }),
     client.researchBulletin.count({ where }),
   ]);
   return { items: rows.map(toListItem), total };
 }
 
-/** Admin listing (all statuses). */
-export async function listAllBulletins(client: PrismaClient = prisma): Promise<BulletinDetail[]> {
-  return client.researchBulletin.findMany({ orderBy: [{ updatedAt: 'desc' }] });
+/** One admin row: the full record plus its internal citation-in count. */
+export type BulletinAdminRow = BulletinDetail & { citationCount: number };
+
+/** Admin listing (all statuses), each with its internal citation-in count. */
+export async function listAllBulletins(client: PrismaClient = prisma): Promise<BulletinAdminRow[]> {
+  const rows = await client.researchBulletin.findMany({
+    orderBy: [{ updatedAt: 'desc' }],
+    include: { _count: { select: { citedBy: true } } },
+  });
+  return rows.map(({ _count, ...b }) => ({ ...b, citationCount: _count.citedBy }));
 }
 
 /** All published slugs+dates for the sitemap. */
@@ -532,6 +555,7 @@ export async function getBulletinAuthorProfile(slug: string, client: PrismaClien
 export async function mostViewedBulletins(limit = 5, client: PrismaClient = prisma): Promise<BulletinListItem[]> {
   const rows = await client.researchBulletin.findMany({
     where: { status: 'published' },
+    include: { _count: { select: { citedBy: true } } },
     orderBy: [{ viewCount: 'desc' }, { publicationDate: 'desc' }],
     take: limit,
   });

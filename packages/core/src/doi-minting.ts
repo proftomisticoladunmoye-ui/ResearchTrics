@@ -1,6 +1,7 @@
 import { prisma, type PrismaClient } from '@researchtrics/db';
 import { badRequest, notFound, conflict } from './errors';
 import { logger } from './logger';
+import { normalizeOrcid } from './orcid';
 
 /**
  * DataCite DOI minting (Spec §37). Registers a citable, resolvable DOI for a
@@ -95,11 +96,12 @@ function creatorFor(a: {
     if (givenName) creator.givenName = givenName;
     if (familyName) creator.familyName = familyName;
   }
-  if (a.orcid) {
+  const orcid = normalizeOrcid(a.orcid);
+  if (orcid) {
     creator.nameIdentifiers = [
       {
         schemeUri: 'https://orcid.org',
-        nameIdentifier: `https://orcid.org/${a.orcid}`,
+        nameIdentifier: `https://orcid.org/${orcid}`,
         nameIdentifierScheme: 'ORCID',
       },
     ];

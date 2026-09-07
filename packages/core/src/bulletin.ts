@@ -10,6 +10,9 @@ import { sanitizeBulletinHtml, htmlToPlainText } from './html-sanitize';
 import { formatCitation, type CitationData, type CitationFormat } from './citation-export';
 import { dataCiteConfigFromEnv, buildDataCiteAttributes, submitDataCiteDoi, isDataCiteMintConfigured } from './doi-minting';
 import { zenodoConfigFromEnv, isZenodoConfigured, mintZenodoDoi } from './zenodo';
+import { normalizeOrcid } from './orcid';
+
+export { normalizeOrcid } from './orcid';
 
 /**
  * ResearchTrics Research Bulletin service (Phase 1 — scholarly publication
@@ -81,12 +84,15 @@ export interface BulletinInput {
 function normalizeAuthors(input?: BulletinAuthor[]): BulletinAuthor[] {
   return (input ?? [])
     .filter((a) => a && typeof a.name === 'string' && a.name.trim().length > 0)
-    .map((a, i) => ({
-      name: a.name.trim(),
-      ...(a.affiliation ? { affiliation: String(a.affiliation).trim() } : {}),
-      ...(a.orcid ? { orcid: String(a.orcid).trim() } : {}),
-      order: typeof a.order === 'number' ? a.order : i,
-    }))
+    .map((a, i) => {
+      const orcid = normalizeOrcid(a.orcid);
+      return {
+        name: a.name.trim(),
+        ...(a.affiliation ? { affiliation: String(a.affiliation).trim() } : {}),
+        ...(orcid ? { orcid } : {}),
+        order: typeof a.order === 'number' ? a.order : i,
+      };
+    })
     .sort((x, y) => x.order - y.order);
 }
 
@@ -739,7 +745,7 @@ export async function mintBulletinDoi(
       {
         title: b.title,
         description: b.abstract,
-        creators: authors.map((a) => ({ name: a.name, affiliation: a.affiliation, orcid: a.orcid })),
+        creators: authors.map((a) => ({ name: a.name, affiliation: a.affiliation, orcid: normalizeOrcid(a.orcid) })),
         publicationDate: b.publicationDate ? b.publicationDate.toISOString().slice(0, 10) : undefined,
         keywords: b.keywords,
         url: landingUrl,
@@ -761,7 +767,7 @@ export async function mintBulletinDoi(
         publishedYear: b.publicationDate ? b.publicationDate.getUTCFullYear() : null,
         publisher: SERIES_PUBLISHER,
         journalName: b.number != null ? `${SERIES_NAME}, No. ${b.number}` : SERIES_NAME,
-        authors: authors.map((a) => ({ rawName: a.name, givenName: null, familyName: null, orcid: a.orcid ?? null })),
+        authors: authors.map((a) => ({ rawName: a.name, givenName: null, familyName: null, orcid: normalizeOrcid(a.orcid) ?? null })),
       },
       landingUrl,
       config.prefix,

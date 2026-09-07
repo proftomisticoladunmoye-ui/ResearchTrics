@@ -3,11 +3,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@researchtrics/ui';
 
-/** Share a page: copy link + quick links to X, LinkedIn, and email. */
-export function ShareButton({ url, title }: { url: string; title: string }) {
+/** Share a page: copy link + quick links to X, LinkedIn, and email. `pingUrl`,
+ * when given, records a share-action use (best-effort engagement metric). */
+export function ShareButton({ url, title, pingUrl }: { url: string; title: string; pingUrl?: string }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  function pingShare() {
+    if (!pingUrl) return;
+    try {
+      if (navigator.sendBeacon) navigator.sendBeacon(pingUrl);
+      else void fetch(pingUrl, { method: 'POST', keepalive: true });
+    } catch {
+      /* metric is best-effort */
+    }
+  }
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -32,6 +43,7 @@ export function ShareButton({ url, title }: { url: string; title: string }) {
     } catch {
       /* clipboard unavailable */
     }
+    pingShare();
     setOpen(false);
   }
 
@@ -55,7 +67,7 @@ export function ShareButton({ url, title }: { url: string; title: string }) {
               href={l.href}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => setOpen(false)}
+              onClick={() => { pingShare(); setOpen(false); }}
               className="block rounded px-3 py-2 text-sm text-rt-text hover:bg-rt-blue-light"
             >
               {l.label}

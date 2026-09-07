@@ -341,6 +341,16 @@ export async function incrementBulletinDownload(id: string, client: PrismaClient
   await client.researchBulletin.update({ where: { id }, data: { downloadCount: { increment: 1 } } }).catch(() => {});
 }
 
+/** Best-effort share increment (engagement proxy — counts share-action uses). */
+export async function incrementBulletinShare(id: string, client: PrismaClient = prisma): Promise<void> {
+  await client.researchBulletin.update({ where: { id }, data: { shareCount: { increment: 1 } } }).catch(() => {});
+}
+
+/** Any-status read by slug — used for admin draft PREVIEW (never public). */
+export async function getBulletinBySlug(slug: string, client: PrismaClient = prisma): Promise<BulletinDetail | null> {
+  return client.researchBulletin.findFirst({ where: { slug } });
+}
+
 // --- Citation ---------------------------------------------------------------
 
 function splitName(name: string): { given?: string; family?: string; literal?: string } {

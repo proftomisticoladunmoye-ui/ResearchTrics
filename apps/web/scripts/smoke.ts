@@ -1337,6 +1337,16 @@ async function main() {
     // Full-text search matches a term that appears ONLY in the body.
     const bodyHit = await core.listPublishedBulletins({ query: 'nested steps', take: 10 });
     check('full-text search finds a body-only phrase', bodyHit.items.some((b) => b.slug === published.slug));
+    // Share counter + draft preview lookup (any-status by slug).
+    await core.incrementBulletinShare(pub!.id);
+    check('share counter increments', (await core.getBulletinById(pub!.id))!.shareCount === 1);
+    const draftForPreview = await core.createBulletin(
+      { title: 'Unpublished Preview Draft', category: 'Psychometrics', abstract: 'A draft used to verify admin preview lookup by slug.', bodyHtml: '<p>draft body</p>' },
+      reg.user.id,
+    );
+    const draftSlug = (await core.getBulletinById(draftForPreview.id))!.slug;
+    check('draft is retrievable by slug for admin preview', (await core.getBulletinBySlug(draftSlug))?.status === 'draft');
+    check('draft is NOT retrievable via the public getter', (await core.getPublishedBulletinBySlug(draftSlug)) === null);
     // Phase 2: PDF generation from the canonical content.
     const pdf = await core.renderBulletinPdf(pub!, 'https://www.researchtrics.com');
     check('bulletin PDF renders as a valid PDF buffer', Buffer.isBuffer(pdf) && pdf.length > 500 && pdf.subarray(0, 5).toString() === '%PDF-');

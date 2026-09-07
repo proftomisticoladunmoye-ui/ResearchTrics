@@ -61,7 +61,9 @@ export function BulletinEditor({ initial }: { initial?: BulletinInitial }) {
   const router = useRouter();
   const [f, setF] = useState<BulletinInitial>(initial ?? EMPTY);
   const [id, setId] = useState<string | undefined>(initial?.id);
+  const [slug, setSlug] = useState<string | undefined>(initial?.slug);
   const [status, setStatus] = useState<string>(initial?.status ?? 'draft');
+  const [titleMissing, setTitleMissing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'error' | 'success'; text: string } | null>(null);
   const [importing, setImporting] = useState(false);
@@ -120,6 +122,8 @@ export function BulletinEditor({ initial }: { initial?: BulletinInitial }) {
       }
       set({ ...(body.data.title ? { title: body.data.title } : {}), bodyHtml: body.data.bodyHtml });
       setReport(body.data.report);
+      // Prompt for a manual title when the importer couldn't detect one.
+      setTitleMissing(body.data.report?.titleDetected === false);
       setMsg({ kind: 'success', text: 'Word document imported. Review the report and edit before publishing.' });
     } catch {
       setMsg({ kind: 'error', text: 'Network error during import.' });
@@ -151,13 +155,14 @@ export function BulletinEditor({ initial }: { initial?: BulletinInitial }) {
       const url = id ? `/api/v1/admin/research-bulletin/${id}` : '/api/v1/admin/research-bulletin';
       const method = id ? 'PATCH' : 'POST';
       const res = await fetch(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload()) });
-      const body = (await res.json().catch(() => ({}))) as { data?: { id: string }; error?: { message?: string } };
+      const body = (await res.json().catch(() => ({}))) as { data?: { id: string; slug?: string }; error?: { message?: string } };
       if (!res.ok) {
         setMsg({ kind: 'error', text: body.error?.message ?? 'Could not save.' });
         return null;
       }
       const savedId = id ?? body.data?.id;
       if (savedId && !id) setId(savedId);
+      if (body.data?.slug && !slug) setSlug(body.data.slug); // enable Preview
       setMsg({ kind: 'success', text: 'Saved.' });
       return savedId ?? null;
     } catch {
@@ -232,8 +237,15 @@ export function BulletinEditor({ initial }: { initial?: BulletinInitial }) {
 
       <Card className="space-y-3 p-5">
         <label className="block">
-          <span className="mb-1 block text-sm font-medium text-rt-text">Title</span>
-          <Input value={f.title} onChange={(e) => set({ title: e.target.value })} maxLength={300} />
+          <span className="mb-1 block text-sm font-medium text-rt-text">
+            Title{titleMissing ? <span className="ml-2 font-normal text-rt-error">⚠ Set the title — it couldn’t be detected from the document</span> : null}
+          </span>
+          <Input
+            value={f.title}
+            onChange={(e) => { set({ title: e.target.value }); if (e.target.value.trim()) setTitleMissing(false); }}
+            maxLength={300}
+            className={titleMissing ? 'border-rt-error' : ''}
+          />
         </label>
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-rt-text">Subtitle (optional)</span>
@@ -324,6 +336,13 @@ export function BulletinEditor({ initial }: { initial?: BulletinInitial }) {
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={save} disabled={busy}>{busy ? 'Working…' : id ? 'Save changes' : 'Create draft'}</Button>
         <Button onClick={publish} disabled={busy} variant="accent">Publish</Button>
+        {slug ? (
+          <a href={`/research-bulletin/${slug}`} target="_blank" rel="noopener noreferrer" className="text-sm text-rt-blue hover:underline">
+            Preview{status === 'published' ? '' : ' (draft)'} ↗
+          </a>
+        ) : (
+          <span className="text-xs text-rt-muted">Save a draft to enable preview</span>
+        )}
         {id && status === 'published' ? <span className="text-xs text-rt-success">Published{f.number != null ? ` · No. ${String(f.number).padStart(3, '0')}` : ''}</span> : <span className="text-xs text-rt-muted">Status: {status}</span>}
       </div>
     </div>

@@ -695,6 +695,7 @@ model ResearchBulletin {
 
   viewCount       Int            @default(0) @map("view_count")
   downloadCount   Int            @default(0) @map("download_count")
+  shareCount      Int            @default(0) @map("share_count")
 
   authorUserId    String?        @map("author_user_id")
   createdAt       DateTime       @default(now()) @map("created_at")

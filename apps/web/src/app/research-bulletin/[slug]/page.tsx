@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   getPublishedBulletinBySlug,
+  getBulletinBySlug,
   incrementBulletinView,
   suggestedCitation,
   listCitedBy,
@@ -12,6 +13,7 @@ import {
   bulletinCommentsEnabled,
   authorSlug,
   seriesConfig,
+  isAdmin,
   BULLETIN_TYPE_LABELS,
   LICENSE_LABELS,
   SERIES_NAME,
@@ -21,6 +23,7 @@ import {
   type BulletinListItem,
 } from '@researchtrics/core';
 import { Badge } from '@researchtrics/ui';
+import { getCurrentUser } from '@/lib/current-user';
 import { ShareButton } from '@/components/share-button';
 import { BulletinCitations } from '@/components/bulletin-citations';
 import { BulletinDiscussion } from '@/components/bulletin-discussion';
@@ -95,12 +98,26 @@ export const revalidate = 300; // ISR: fast, cacheable public reads (§43)
 
 export default async function BulletinPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const b = await getPublishedBulletinBySlug(slug);
+  let b = await getPublishedBulletinBySlug(slug);
+
+  // Admin draft PREVIEW: unpublished bulletins are 404 to the public, but an
+  // admin may preview one via the same layout (never indexed; no metric bumps).
+  let isPreview = false;
+  if (!b) {
+    const viewer = await getCurrentUser();
+    if (viewer && isAdmin(viewer.actor)) {
+      const draft = await getBulletinBySlug(slug);
+      if (draft) {
+        b = draft;
+        isPreview = true;
+      }
+    }
+  }
   if (!b) notFound();
 
-  void incrementBulletinView(b.id); // fire-and-forget
+  if (!isPreview) void incrementBulletinView(b.id); // fire-and-forget
 
-  const commentsOn = bulletinCommentsEnabled();
+  const commentsOn = bulletinCommentsEnabled() && !isPreview;
   const [citedBy, related, partOf, comments] = await Promise.all([
     listCitedBy(b.id),
     relatedBulletins(b.id, 5),
@@ -133,6 +150,12 @@ export default async function BulletinPage({ params }: { params: Promise<{ slug:
   return (
     <article className="mx-auto max-w-3xl px-4 py-10">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+
+      {isPreview ? (
+        <div className="mb-4 rounded-lg border border-rt-gold/50 bg-rt-gold-light/30 px-4 py-2 text-sm text-rt-text">
+          <strong>Draft preview</strong> — this bulletin is <em>{b.status}</em> and not publicly visible or indexed. Publish it to make it live.
+        </div>
+      ) : null}
 
       <nav className="mb-4 text-xs text-rt-muted" aria-label="Breadcrumb">
         <Link href="/research-bulletin" className="hover:underline">Research Bulletin</Link>
@@ -168,6 +191,15 @@ export default async function BulletinPage({ params }: { params: Promise<{ slug:
         {' · '}Published by {SERIES_PUBLISHER}
       </p>
 
+      {/* Engagement metrics (§31): reads = full-text PDF downloads; citations are
+          internal (on-platform, verified). Bot-filtered aggregates, no PII. */}
+      <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-rt-muted" aria-label="Metrics">
+        <span>👁 {b.viewCount.toLocaleString()} views</span>
+        <span>⬇ {b.downloadCount.toLocaleString()} reads (PDF)</span>
+        <span>↗ {b.shareCount.toLocaleString()} shares</span>
+        <span>❝ {citedBy.length.toLocaleString()} citations</span>
+      </p>
+
       {partOf.length > 0 ? (
         <p className="mt-3 text-sm text-rt-muted">
           Part of:{' '}
@@ -189,7 +221,7 @@ export default async function BulletinPage({ params }: { params: Promise<{ slug:
         >
           ⬇ Download PDF
         </a>
-        <ShareButton url={url} title={b.title} />
+        <ShareButton url={url} title={b.title} pingUrl={`/api/v1/research-bulletin/${b.slug}/share`} />
       </div>
 
       <section className="mt-8 rounded-lg border border-rt-border bg-rt-blue-light/20 p-5">

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { ContentPage } from '@/components/content-page';
 
 export const metadata: Metadata = {
@@ -26,12 +27,9 @@ export default function ContactPage() {
 
       <h2>Report a problem</h2>
       <p>
-        For copyright concerns see our copyright policy; for anything else — a bug, a data-quality
-        issue, or a security report — email us with as much detail as you can.
-      </p>
-
-      <p className="text-xs">
-        Set up the {CONTACT_EMAIL} inbox (or change this address) once your mail is configured.
+        For copyright concerns see our <Link href="/copyright">copyright policy</Link>; for anything
+        else — a bug, a data-quality issue, or a security report — email us with as much detail as you
+        can.
       </p>
     </ContentPage>
   );

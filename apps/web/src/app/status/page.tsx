@@ -23,7 +23,8 @@ export default function StatusPage() {
       intro="An overview of the components that power ResearchTrics."
     >
       <p>
-        For a live health check, see <Link href="/api/v1/health">/api/v1/health</Link>. Detailed,
+        For a live health check, see{' '}
+        <a href="/api/v1/health" target="_blank" rel="noopener noreferrer">/api/v1/health</a>. Detailed,
         per-source health of the scholarly providers is available to administrators.
       </p>
       <ul>

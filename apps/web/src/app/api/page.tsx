@@ -29,9 +29,23 @@ export default function ApiPage() {
         <li><code>GET /api/v1/files/&lt;key&gt;</code> — access-controlled file serving.</li>
       </ul>
 
+      <h2>Research Bulletin</h2>
+      <ul>
+        <li><code>GET /api/v1/research-bulletin/search?q=…</code> — search the bulletin series.</li>
+        <li><code>GET /api/v1/research-bulletin/&lt;slug&gt;/citation</code> — formatted citation export.</li>
+        <li><code>GET /api/v1/research-bulletin/&lt;slug&gt;/pdf</code> — the canonical PDF of record.</li>
+        <li>
+          <a href="/research-bulletin/feed.xml" target="_blank" rel="noopener noreferrer">
+            <code>GET /research-bulletin/feed.xml</code>
+          </a>{' '}
+          — RSS feed of published bulletins.
+        </li>
+      </ul>
+
       <p>
         The API is evolving alongside the platform. Try the live search on the{' '}
-        <Link href="/discover">discover page</Link>, and see the{' '}
+        <Link href="/discover">discover page</Link>, browse the{' '}
+        <Link href="/research-bulletin">Research Bulletin</Link>, and see the{' '}
         <Link href="/docs">documentation</Link> for core concepts.
       </p>
     </ContentPage>

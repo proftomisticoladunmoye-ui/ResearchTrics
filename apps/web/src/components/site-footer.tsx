@@ -9,6 +9,9 @@ const COLUMNS: { heading: string; links: { href: string; label: string }[] }[] =
       { href: '/discover', label: 'Discover Research' },
       { href: '/researchers', label: 'Researchers' },
       { href: '/publications', label: 'Publications' },
+      { href: '/datasets', label: 'Datasets' },
+      { href: '/software', label: 'Research Software' },
+      { href: '/instruments', label: 'Research Instruments' },
       { href: '/institutions', label: 'Institutions' },
       { href: '/journals', label: 'Journals' },
       { href: '/research-groups', label: 'Research Groups' },
@@ -17,6 +20,7 @@ const COLUMNS: { heading: string; links: { href: string; label: string }[] }[] =
   {
     heading: 'Platform',
     links: [
+      { href: '/research-bulletin', label: 'Research Bulletin' },
       { href: '/projects', label: 'Projects' },
       { href: '/opportunities', label: 'Research Opportunities' },
       { href: '/about', label: 'About' },

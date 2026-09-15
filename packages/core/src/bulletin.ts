@@ -349,6 +349,33 @@ export async function listPublishedBulletinSlugs(client: PrismaClient = prisma):
   return rows;
 }
 
+/**
+ * Distinct bulletin author pages for the sitemap (§42) — every author of a
+ * published bulletin gets a crawlable `/research-bulletin/authors/<slug>` page,
+ * so those indexable pages are discoverable. Deduped by slug, each carrying the
+ * newest updatedAt among that author's bulletins.
+ */
+export async function listBulletinAuthorSlugs(
+  client: PrismaClient = prisma,
+): Promise<Array<{ slug: string; updatedAt: Date }>> {
+  const rows = await client.researchBulletin.findMany({
+    where: { status: 'published' },
+    select: { authors: true, updatedAt: true },
+  });
+  const bySlug = new Map<string, Date>();
+  for (const r of rows) {
+    const authors = Array.isArray(r.authors) ? (r.authors as unknown as BulletinAuthor[]) : [];
+    for (const a of authors) {
+      if (!a?.name) continue;
+      const slug = authorSlug(a.name);
+      if (!slug) continue;
+      const prev = bySlug.get(slug);
+      if (!prev || r.updatedAt > prev) bySlug.set(slug, r.updatedAt);
+    }
+  }
+  return [...bySlug.entries()].map(([slug, updatedAt]) => ({ slug, updatedAt }));
+}
+
 /** Distinct categories among published bulletins (for the hub filter). */
 export async function listBulletinCategories(client: PrismaClient = prisma): Promise<string[]> {
   const rows = await client.researchBulletin.findMany({

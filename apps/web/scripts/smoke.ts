@@ -1334,6 +1334,11 @@ async function main() {
     check('re-publishing preserves the original number', republished.number === published.number);
     const slugs = await core.listPublishedBulletinSlugs();
     check('published bulletin appears in the sitemap source', slugs.some((s) => s.slug === published.slug));
+    const authorSlugs = await core.listBulletinAuthorSlugs();
+    check(
+      'bulletin author page appears in the sitemap source',
+      authorSlugs.some((a) => a.slug === core.authorSlug('Oladunmoye, E. O.')),
+    );
     // Full-text search matches a term that appears ONLY in the body.
     const bodyHit = await core.listPublishedBulletins({ query: 'nested steps', take: 10 });
     check('full-text search finds a body-only phrase', bodyHit.items.some((b) => b.slug === published.slug));

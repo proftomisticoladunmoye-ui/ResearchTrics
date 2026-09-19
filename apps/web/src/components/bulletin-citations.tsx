@@ -36,6 +36,7 @@ export function BulletinCitations({ slug, suggested }: { slug: string; suggested
           <a
             key={d.format}
             href={`/api/v1/research-bulletin/${slug}/citation?format=${d.format}`}
+            rel="nofollow"
             className="rounded border border-rt-border px-2 py-1 text-xs text-rt-blue hover:bg-rt-blue-light/30"
           >
             {d.label}

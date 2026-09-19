@@ -249,7 +249,10 @@ export default async function PublicationPage({
           <div className="mt-3 flex flex-wrap gap-2">
             {formats.map(([fmt, meta]) => (
               <Button key={fmt} asChild variant="secondary" size="sm">
-                <a href={`/api/v1/publications/${p.slug}/cite?format=${fmt}`}>{meta.label}</a>
+                {/* rel=nofollow: these are data-export endpoints under /api/ (robots-
+                    blocked). Not marking them left Google discovering ~1k blocked
+                    URLs and wasting crawl budget meant for real content pages. */}
+                <a href={`/api/v1/publications/${p.slug}/cite?format=${fmt}`} rel="nofollow">{meta.label}</a>
               </Button>
             ))}
           </div>

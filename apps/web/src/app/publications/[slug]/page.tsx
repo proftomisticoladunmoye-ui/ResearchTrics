@@ -78,11 +78,13 @@ export async function generateMetadata({
   const pdfHref = pdfUrlFor(p, appUrl);
   if (pdfHref) citationMeta.citation_pdf_url = pdfHref;
 
+  const description = p.abstract ? p.abstract.slice(0, 200) : `${p.title} — ResearchTrics.`;
   return {
     title: p.title,
-    description: p.abstract ? p.abstract.slice(0, 200) : `${p.title} — ResearchTrics.`,
+    description,
     alternates: { canonical: url },
-    openGraph: { type: 'article', title: p.title, url },
+    openGraph: { type: 'article', title: p.title, description, url, siteName: 'ResearchTrics', images: [{ url: '/logo.png' }] },
+    twitter: { card: 'summary', title: p.title, description, images: ['/logo.png'] },
     other: citationMeta,
   };
 }
@@ -134,11 +136,46 @@ export default async function PublicationPage({
     '@type': 'ScholarlyArticle',
     headline: p.title,
     ...(p.abstract ? { abstract: p.abstract } : {}),
-    author: p.authors.map((a) => ({ '@type': 'Person', name: a.rawName })),
-    ...(p.journal?.name ? { isPartOf: { '@type': 'Periodical', name: p.journal.name } } : {}),
+    author: p.authors.map((a) => {
+      // Link the author entity out: to their ORCID and/or their ResearchTrics
+      // profile, so Google connects the work to a known person (§11).
+      const sameAs = [
+        ...(a.orcid ? [`https://orcid.org/${a.orcid}`] : []),
+        ...(a.researcher ? [`${appUrl}/researchers/${a.researcher.slug}`] : []),
+      ];
+      return {
+        '@type': 'Person',
+        name: a.rawName,
+        ...(a.researcher ? { url: `${appUrl}/researchers/${a.researcher.slug}` } : {}),
+        ...(sameAs.length ? { sameAs } : {}),
+      };
+    }),
+    ...(p.journal?.name
+      ? {
+          isPartOf: {
+            '@type': 'Periodical',
+            name: p.journal.name,
+            ...(p.journal.issnElectronic || p.journal.issnPrint
+              ? { issn: (p.journal.issnElectronic ?? p.journal.issnPrint) as string }
+              : {}),
+          },
+        }
+      : {}),
     ...(p.publishedOn ? { datePublished: p.publishedOn.toISOString().slice(0, 10) } : {}),
+    dateModified: p.updatedAt.toISOString().slice(0, 10),
     ...(doi ? { identifier: `https://doi.org/${doi}`, sameAs: `https://doi.org/${doi}` } : {}),
     url: `${appUrl}/publications/${p.slug}`,
+    mainEntityOfPage: `${appUrl}/publications/${p.slug}`,
+  };
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: appUrl },
+      { '@type': 'ListItem', position: 2, name: 'Publications', item: `${appUrl}/publications` },
+      { '@type': 'ListItem', position: 3, name: p.title, item: `${appUrl}/publications/${p.slug}` },
+    ],
   };
 
   const formats = Object.entries(CITATION_FORMATS) as [CitationFormat, { label: string }][];
@@ -148,6 +185,10 @@ export default async function PublicationPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(scholarlyJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
 
       <div className="flex flex-wrap items-center gap-2">

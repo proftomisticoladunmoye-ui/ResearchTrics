@@ -40,6 +40,7 @@ export async function generateMetadata({
     : r.aiSummary
       ? r.aiSummary.slice(0, 200)
       : `${r.displayName} on ResearchTrics — ${r.researchtricsId}.`;
+  const ogImage = r.photoUrl ?? '/logo.png';
   return {
     title: r.displayName,
     description,
@@ -49,7 +50,10 @@ export async function generateMetadata({
       title: r.displayName,
       description,
       url: `${appUrl}/researchers/${r.slug}`,
+      siteName: 'ResearchTrics',
+      images: [{ url: ogImage }],
     },
+    twitter: { card: 'summary', title: r.displayName, description, images: [ogImage] },
   };
 }
 
@@ -87,19 +91,37 @@ export default async function ResearcherProfilePage({
   const orcid = r.orcidConnection?.orcid ?? r.identifiers.find((i) => i.scheme === 'orcid')?.value;
   const primaryAffiliation = r.affiliations.find((a) => a.isPrimary) ?? r.affiliations[0];
 
+  // Link the person entity out to every canonical identity we hold (ORCID,
+  // personal site) so Google can reconcile the profile with the known person (§11).
+  const sameAs = [
+    ...(orcid ? [`https://orcid.org/${orcid}`] : []),
+    ...(r.website ? [r.website] : []),
+  ];
   const personJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Person',
     name: r.displayName,
+    ...(r.photoUrl ? { image: r.photoUrl } : {}),
     ...(r.academicRank ? { jobTitle: r.academicRank } : {}),
     ...(r.biography ? { description: r.biography } : r.aiSummary ? { description: r.aiSummary } : {}),
-    ...(orcid ? { identifier: `https://orcid.org/${orcid}`, sameAs: `https://orcid.org/${orcid}` } : {}),
+    ...(orcid ? { identifier: `https://orcid.org/${orcid}` } : {}),
+    ...(sameAs.length ? { sameAs } : {}),
     ...(r.interests.length ? { knowsAbout: r.interests.map((i) => i.label) } : {}),
     ...(primaryAffiliation
       ? { affiliation: { '@type': 'Organization', name: primaryAffiliation.institution.name } }
       : {}),
-    ...(r.website ? { url: r.website } : {}),
+    url: `${appUrl}/researchers/${r.slug}`,
     mainEntityOfPage: `${appUrl}/researchers/${r.slug}`,
+  };
+
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: appUrl },
+      { '@type': 'ListItem', position: 2, name: 'Researchers', item: `${appUrl}/researchers` },
+      { '@type': 'ListItem', position: 3, name: r.displayName, item: `${appUrl}/researchers/${r.slug}` },
+    ],
   };
 
   return (
@@ -107,6 +129,10 @@ export default async function ResearcherProfilePage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
 
       {/* Unclaimed profile — discovered from public scholarly metadata (§4, §68) */}

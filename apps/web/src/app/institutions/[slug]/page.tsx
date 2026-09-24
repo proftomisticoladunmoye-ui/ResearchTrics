@@ -14,10 +14,15 @@ export async function generateMetadata({
   const { slug } = await params;
   const inst = await getInstitutionBySlug(slug);
   if (!inst) return { title: 'Institution' };
+  const place = [inst.city, inst.country].filter(Boolean).join(', ');
+  const description = `${inst.name}${place ? ` — ${place}` : ''}. Researchers and publications indexed on ResearchTrics.`;
+  const url = `${appUrl}/institutions/${inst.slug}`;
   return {
     title: inst.name,
-    description: `${inst.name} on ResearchTrics.`,
-    alternates: { canonical: `${appUrl}/institutions/${inst.slug}` },
+    description,
+    alternates: { canonical: url },
+    openGraph: { type: 'website', title: inst.name, description, url, siteName: 'ResearchTrics', images: [{ url: '/logo.png' }] },
+    twitter: { card: 'summary', title: inst.name, description, images: ['/logo.png'] },
   };
 }
 
@@ -30,8 +35,36 @@ export default async function InstitutionPage({
   const inst = await getInstitutionBySlug(slug);
   if (!inst) notFound();
 
+  const url = `${appUrl}/institutions/${inst.slug}`;
+  const sameAs = [
+    ...(inst.rorId ? [`https://ror.org/${inst.rorId}`] : []),
+    ...(inst.website ? [inst.website] : []),
+  ];
+  const orgJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': inst.type === 'education' ? 'CollegeOrUniversity' : 'Organization',
+    name: inst.name,
+    ...(sameAs.length ? { sameAs } : {}),
+    ...(inst.country || inst.city
+      ? { address: { '@type': 'PostalAddress', ...(inst.city ? { addressLocality: inst.city } : {}), ...(inst.country ? { addressCountry: inst.country } : {}) } }
+      : {}),
+    url,
+    mainEntityOfPage: url,
+  };
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: appUrl },
+      { '@type': 'ListItem', position: 2, name: 'Institutions', item: `${appUrl}/institutions` },
+      { '@type': 'ListItem', position: 3, name: inst.name, item: url },
+    ],
+  };
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold text-rt-text">{inst.name}</h1>
         {inst.rorId ? (

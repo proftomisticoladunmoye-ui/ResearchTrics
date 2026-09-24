@@ -14,7 +14,16 @@ export async function generateMetadata({
   const { slug } = await params;
   const j = await prisma.journal.findUnique({ where: { slug } });
   if (!j) return { title: 'Journal' };
-  return { title: j.name, alternates: { canonical: `${appUrl}/journals/${j.slug}` } };
+  const issn = j.issnElectronic ?? j.issnPrint;
+  const description = `${j.name}${issn ? ` (ISSN ${issn})` : ''}${j.publisher ? `, published by ${j.publisher}` : ''} — publications indexed on ResearchTrics.`;
+  const url = `${appUrl}/journals/${j.slug}`;
+  return {
+    title: j.name,
+    description,
+    alternates: { canonical: url },
+    openGraph: { type: 'website', title: j.name, description, url, siteName: 'ResearchTrics', images: [{ url: '/logo.png' }] },
+    twitter: { card: 'summary', title: j.name, description, images: ['/logo.png'] },
+  };
 }
 
 export default async function JournalPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -31,8 +40,31 @@ export default async function JournalPage({ params }: { params: Promise<{ slug: 
   });
   if (!journal) notFound();
 
+  const issn = journal.issnElectronic ?? journal.issnPrint;
+  const url = `${appUrl}/journals/${journal.slug}`;
+  const periodicalJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Periodical',
+    name: journal.name,
+    ...(issn ? { issn } : {}),
+    ...(journal.publisher ? { publisher: { '@type': 'Organization', name: journal.publisher } } : {}),
+    url,
+    mainEntityOfPage: url,
+  };
+  const breadcrumbJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: appUrl },
+      { '@type': 'ListItem', position: 2, name: 'Journals', item: `${appUrl}/journals` },
+      { '@type': 'ListItem', position: 3, name: journal.name, item: url },
+    ],
+  };
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-12">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(periodicalJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <h1 className="text-2xl font-semibold text-rt-text">{journal.name}</h1>
       <div className="mt-2 flex flex-wrap gap-2">
         {journal.issnElectronic || journal.issnPrint ? (

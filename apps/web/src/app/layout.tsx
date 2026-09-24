@@ -25,6 +25,12 @@ export const metadata: Metadata = {
     url: appUrl,
     images: [{ url: '/logo.png', width: 512, height: 512, alt: 'ResearchTrics' }],
   },
+  twitter: {
+    card: 'summary',
+    title: 'ResearchTrics — Make Research Visible',
+    description: 'Make Research Visible. Discoverable. Connected. Measurable.',
+    images: ['/logo.png'],
+  },
   robots: { index: true, follow: true },
 };
 

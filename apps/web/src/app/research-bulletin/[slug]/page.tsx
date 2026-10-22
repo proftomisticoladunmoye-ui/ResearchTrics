@@ -60,15 +60,17 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   const url = `${appUrl}/research-bulletin/${b.slug}`;
   const authors = (Array.isArray(b.authors) ? (b.authors as unknown as BulletinAuthor[]) : []).map((a) => a.name);
-  const seriesTitle = b.number != null ? `${SERIES_NAME}, No. ${numberLabel(b.number)}` : SERIES_NAME;
-  // Highwire citation_* tags for scholarly discovery (§5). No citation_pdf_url
-  // until the PDF renderer ships (Phase 2) — a dead link would hurt indexing.
+  // Highwire citation_* tags for scholarly discovery (§5). The journal title is
+  // the CONSTANT series name — the issue number goes in citation_issue — so
+  // Google Scholar groups every bulletin under one venue instead of treating
+  // each issue as a separate one-article journal.
   const citation: Record<string, string | string[]> = {
     citation_title: b.title,
     citation_author: authors.length > 0 ? authors : [SERIES_PUBLISHER],
-    citation_journal_title: seriesTitle,
+    citation_journal_title: SERIES_NAME,
     citation_publisher: SERIES_PUBLISHER,
   };
+  if (b.number != null) citation.citation_issue = numberLabel(b.number);
   if (b.publicationDate) citation.citation_publication_date = b.publicationDate.toISOString().slice(0, 10);
   if (b.keywords.length) citation.citation_keywords = b.keywords.join('; ');
   if (b.doi) citation.citation_doi = b.doi;

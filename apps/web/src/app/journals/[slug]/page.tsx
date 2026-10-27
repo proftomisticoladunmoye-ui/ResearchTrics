@@ -14,6 +14,12 @@ export async function generateMetadata({
   const { slug } = await params;
   const j = await prisma.journal.findUnique({ where: { slug } });
   if (!j) return { title: 'Journal' };
+  // A journal with no public publications has nothing to show — indexing it
+  // produces an empty "Soft 404" (many are junk OpenAlex source records, e.g.
+  // "not-found-repository-…"). noindex,follow until it has real content.
+  const pubCount = await prisma.publication.count({
+    where: { journalId: j.id, deletedAt: null, visibility: 'public' },
+  });
   const issn = j.issnElectronic ?? j.issnPrint;
   const description = `${j.name}${issn ? ` (ISSN ${issn})` : ''}${j.publisher ? `, published by ${j.publisher}` : ''} — publications indexed on ResearchTrics.`;
   const url = `${appUrl}/journals/${j.slug}`;
@@ -21,6 +27,7 @@ export async function generateMetadata({
     title: j.name,
     description,
     alternates: { canonical: url },
+    ...(pubCount === 0 ? { robots: { index: false, follow: true } } : {}),
     openGraph: { type: 'website', title: j.name, description, url, siteName: 'ResearchTrics', images: [{ url: '/logo.png' }] },
     twitter: { card: 'summary', title: j.name, description, images: ['/logo.png'] },
   };

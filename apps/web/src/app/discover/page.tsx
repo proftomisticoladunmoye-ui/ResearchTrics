@@ -9,10 +9,30 @@ import {
 import { Card, Input, Button, Badge, Avatar } from '@researchtrics/ui';
 import { DiscoverSidebar } from '@/components/discover-sidebar';
 
-export const metadata: Metadata = {
-  title: 'Discover Research',
-  description: 'Search researchers, publications, institutions, and journals on ResearchTrics.',
-};
+const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+
+/**
+ * Only the clean entry page (/discover, no params) is indexable. Every
+ * search/filter/pagination variant is an internal search-results page — Google
+ * advises against indexing those, and crawling deep pages (?page=40) or the
+ * literal SearchAction template (?q={search_term_string}) produced empty "Soft
+ * 404" results. Marking parameterised variants noindex,follow removes the soft
+ * 404s while still letting crawlers follow through to real content.
+ */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+  const parameterised = Object.keys(sp).length > 0;
+  return {
+    title: 'Discover Research',
+    description: 'Search researchers, publications, institutions, and journals on ResearchTrics.',
+    alternates: { canonical: `${appUrl}/discover` },
+    ...(parameterised ? { robots: { index: false, follow: true } } : {}),
+  };
+}
 
 export const dynamic = 'force-dynamic';
 
